@@ -9,6 +9,9 @@ import com.followup.actionitem.entity.ActionItemStatus;
 import com.followup.actionitem.entity.Priority;
 import com.followup.actionitem.repository.ActionItemRepository;
 import com.followup.actionitem.repository.MeetingActionLinkRepository;
+import com.followup.ai.entity.AiAnalysisRun;
+import com.followup.ai.entity.AnalysisStatus;
+import com.followup.ai.repository.AiAnalysisRunRepository;
 import com.followup.global.exception.BusinessException;
 import com.followup.global.exception.ErrorCode;
 import com.followup.global.security.CurrentUserProvider;
@@ -16,7 +19,9 @@ import com.followup.meeting.dto.MeetingCreateRequest;
 import com.followup.meeting.dto.MeetingDetailResponse;
 import com.followup.meeting.dto.MeetingListResponse;
 import com.followup.meeting.dto.MeetingUpdateRequest;
+import com.followup.meeting.entity.Decision;
 import com.followup.meeting.entity.MeetingStatus;
+import com.followup.meeting.repository.DecisionRepository;
 import com.followup.meeting.repository.MeetingRepository;
 import com.followup.project.dto.ProjectCreateRequest;
 import com.followup.project.dto.ProjectMemberCreateRequest;
@@ -63,6 +68,12 @@ class MeetingServiceTest {
 
     @Autowired
     private MeetingActionLinkRepository meetingActionLinkRepository;
+
+    @Autowired
+    private AiAnalysisRunRepository aiAnalysisRunRepository;
+
+    @Autowired
+    private DecisionRepository decisionRepository;
 
     @MockitoBean
     private CurrentUserProvider currentUserProvider;
@@ -294,5 +305,58 @@ class MeetingServiceTest {
 
         assertThat(actionItemRepository.findById(todo.getId())).isPresent();
         assertThat(meetingActionLinkRepository.findAllByMeetingId(created.id())).isEmpty();
+    }
+
+    @Test
+    void deleteMeeting_conflictWhenAiAnalysisRunExists() {
+        Long projectId = createProjectAsOwner();
+        actingAs(ownerId);
+        MeetingDetailResponse created = meetingService.createMeeting(projectId, baseRequest(null, null));
+        AiAnalysisRun run = aiAnalysisRunRepository.save(AiAnalysisRun.builder()
+                .meeting(meetingRepository.getReferenceById(created.id()))
+                .requestedBy(userRepository.getReferenceById(ownerId))
+                .status(AnalysisStatus.GENERATED)
+                .build());
+
+        assertThatThrownBy(() -> meetingService.deleteMeeting(created.id()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.MEETING_DELETE_CONFLICT);
+
+        assertThat(meetingRepository.findById(created.id())).isPresent();
+        assertThat(aiAnalysisRunRepository.findById(run.getId())).isPresent();
+    }
+
+    @Test
+    void deleteMeeting_conflictWhenDecisionExists() {
+        Long projectId = createProjectAsOwner();
+        actingAs(ownerId);
+        MeetingDetailResponse created = meetingService.createMeeting(projectId, baseRequest(null, null));
+        Decision decision = decisionRepository.save(Decision.builder()
+                .meeting(meetingRepository.getReferenceById(created.id()))
+                .content("Decided to proceed")
+                .build());
+
+        assertThatThrownBy(() -> meetingService.deleteMeeting(created.id()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.MEETING_DELETE_CONFLICT);
+
+        assertThat(meetingRepository.findById(created.id())).isPresent();
+        assertThat(decisionRepository.findById(decision.getId())).isPresent();
+    }
+
+    @Test
+    void deleteMeeting_succeedsWhenNoAiOrDecisionHistory() {
+        Long projectId = createProjectAsOwner();
+        actingAs(ownerId);
+        MeetingDetailResponse created = meetingService.createMeeting(projectId, baseRequest(null, null));
+
+        assertThat(aiAnalysisRunRepository.existsByMeetingId(created.id())).isFalse();
+        assertThat(decisionRepository.existsByMeetingId(created.id())).isFalse();
+
+        meetingService.deleteMeeting(created.id());
+
+        assertThat(meetingRepository.findById(created.id())).isEmpty();
     }
 }

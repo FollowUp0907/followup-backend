@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface AiAnalysisRunRepository extends JpaRepository<AiAnalysisRun, Long> {
 
     List<AiAnalysisRun> findAllByMeetingIdOrderByCreatedAtDesc(Long meetingId);
+
+    boolean existsByMeetingId(Long meetingId);
 }

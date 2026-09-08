@@ -27,6 +27,7 @@ public enum ErrorCode {
     ANALYSIS_ALREADY_CONFIRMED(HttpStatus.CONFLICT, "Analysis has already been confirmed"),
     ANALYSIS_NOT_CONFIRMABLE(HttpStatus.CONFLICT, "Analysis is not in a confirmable state"),
     INVALID_ANALYSIS_ASSIGNEE(HttpStatus.BAD_REQUEST, "Assignee must be a member of this project"),
+    MEETING_DELETE_CONFLICT(HttpStatus.CONFLICT, "AI 분석 또는 결정 이력이 존재하는 회의는 삭제할 수 없습니다."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
 
     private final HttpStatus status;
