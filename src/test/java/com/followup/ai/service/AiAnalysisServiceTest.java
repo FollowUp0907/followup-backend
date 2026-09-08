@@ -3,6 +3,9 @@ package com.followup.ai.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -26,6 +29,7 @@ import com.followup.global.exception.ErrorCode;
 import com.followup.global.security.CurrentUserProvider;
 import com.followup.meeting.dto.MeetingCreateRequest;
 import com.followup.meeting.dto.MeetingDetailResponse;
+import com.followup.meeting.dto.MeetingUpdateRequest;
 import com.followup.meeting.entity.Decision;
 import com.followup.meeting.repository.DecisionRepository;
 import com.followup.meeting.repository.MeetingRepository;
@@ -81,6 +85,9 @@ class AiAnalysisServiceTest {
 
     @Autowired
     private AiAnalysisRunRepository aiAnalysisRunRepository;
+
+    @Autowired
+    private AiAnalysisRunTransactionService aiAnalysisRunTransactionService;
 
     @Autowired
     private MeetingRepository meetingRepository;
@@ -237,6 +244,174 @@ class AiAnalysisServiceTest {
         assertThat(response.status()).isEqualTo(AnalysisStatus.FAILED);
         assertThat(response.errorMessage()).isEqualTo("AI service unavailable");
         assertThat(response.draft()).isNull();
+    }
+
+    @Test
+    void requestAnalysis_duplicateRequestDoesNotCallGeminiAgain() {
+        Long projectId = createProjectAsOwner();
+        Long meetingId = createMeetingWithContent(projectId, "We discussed the roadmap.");
+        when(aiAnalysisClient.analyze(any(), any())).thenReturn(sampleDraft());
+        when(aiAnalysisClient.getModelName()).thenReturn("fake-model");
+        when(aiAnalysisClient.getPromptVersion()).thenReturn("v1");
+        actingAs(ownerId);
+
+        aiAnalysisService.requestAnalysis(meetingId);
+        aiAnalysisService.requestAnalysis(meetingId);
+
+        verify(aiAnalysisClient, times(1)).analyze(any(), any());
+    }
+
+    @Test
+    void requestAnalysis_reusesGeneratedAnalysisForSameInput() {
+        Long projectId = createProjectAsOwner();
+        Long meetingId = createMeetingWithContent(projectId, "We discussed the roadmap.");
+        when(aiAnalysisClient.analyze(any(), any())).thenReturn(sampleDraft());
+        when(aiAnalysisClient.getModelName()).thenReturn("fake-model");
+        when(aiAnalysisClient.getPromptVersion()).thenReturn("v1");
+        actingAs(ownerId);
+        AiAnalysisService.AnalysisRequestResult first = aiAnalysisService.requestAnalysis(meetingId);
+        assertThat(first.response().status()).isEqualTo(AnalysisStatus.GENERATED);
+
+        AiAnalysisService.AnalysisRequestResult second = aiAnalysisService.requestAnalysis(meetingId);
+
+        assertThat(second.reused()).isTrue();
+        assertThat(second.response().id()).isEqualTo(first.response().id());
+        assertThat(second.response().status()).isEqualTo(AnalysisStatus.GENERATED);
+    }
+
+    @Test
+    void requestAnalysis_reusesConfirmedAnalysisForSameInput() {
+        Long projectId = createProjectAsOwner();
+        Long meetingId = createMeetingWithContent(projectId, "We discussed the roadmap.");
+        AnalysisResponse generated = generateAnalysis(meetingId);
+        actingAs(ownerId);
+        aiAnalysisService.confirmAnalysis(generated.id(), confirmRequest(null, Priority.HIGH));
+
+        AiAnalysisService.AnalysisRequestResult result = aiAnalysisService.requestAnalysis(meetingId);
+
+        assertThat(result.reused()).isTrue();
+        assertThat(result.response().id()).isEqualTo(generated.id());
+        assertThat(result.response().status()).isEqualTo(AnalysisStatus.CONFIRMED);
+        // Only the one Gemini call made by generateAnalysis(); confirming/re-requesting never call it again.
+        verify(aiAnalysisClient, times(1)).analyze(any(), any());
+    }
+
+    @Test
+    void requestAnalysis_reusesProcessingAnalysisForSameInputWithoutCallingGemini() {
+        Long projectId = createProjectAsOwner();
+        Long meetingId = createMeetingWithContent(projectId, "We discussed the roadmap.");
+        when(aiAnalysisClient.getModelName()).thenReturn("fake-model");
+        when(aiAnalysisClient.getPromptVersion()).thenReturn("v1");
+        actingAs(ownerId);
+        // Seed a PROCESSING record the same way AiAnalysisService itself would, without ever
+        // resolving it -- simulates a request that is still in flight.
+        AiAnalysisRunTransactionService.AnalysisStart processing =
+                aiAnalysisRunTransactionService.startAnalysis(meetingId, ownerId, "fake-model", "v1");
+
+        AiAnalysisService.AnalysisRequestResult result = aiAnalysisService.requestAnalysis(meetingId);
+
+        assertThat(result.reused()).isTrue();
+        assertThat(result.response().id()).isEqualTo(processing.analysisId());
+        assertThat(result.response().status()).isEqualTo(AnalysisStatus.PROCESSING);
+        verify(aiAnalysisClient, never()).analyze(any(), any());
+    }
+
+    @Test
+    void requestAnalysis_failedAnalysisAllowsGeminiRetry() {
+        Long projectId = createProjectAsOwner();
+        Long meetingId = createMeetingWithContent(projectId, "We discussed the roadmap.");
+        when(aiAnalysisClient.getModelName()).thenReturn("fake-model");
+        when(aiAnalysisClient.getPromptVersion()).thenReturn("v1");
+        when(aiAnalysisClient.analyze(any(), any())).thenThrow(new RuntimeException("AI service unavailable"));
+        actingAs(ownerId);
+        AiAnalysisService.AnalysisRequestResult first = aiAnalysisService.requestAnalysis(meetingId);
+        assertThat(first.response().status()).isEqualTo(AnalysisStatus.FAILED);
+
+        // doReturn(...).when(...) (not when(...).thenReturn(...)) -- the mock is still stubbed to
+        // throw, and when(mock.method()) would re-invoke it to record the call, immediately
+        // re-triggering that throw before the new stub could be applied.
+        doReturn(sampleDraft()).when(aiAnalysisClient).analyze(any(), any());
+        AiAnalysisService.AnalysisRequestResult second = aiAnalysisService.requestAnalysis(meetingId);
+
+        assertThat(second.reused()).isFalse();
+        assertThat(second.response().id()).isNotEqualTo(first.response().id());
+        assertThat(second.response().status()).isEqualTo(AnalysisStatus.GENERATED);
+        verify(aiAnalysisClient, times(2)).analyze(any(), any());
+    }
+
+    @Test
+    void requestAnalysis_newAnalysisWhenMeetingContentChanges() {
+        Long projectId = createProjectAsOwner();
+        Long meetingId = createMeetingWithContent(projectId, "Original content");
+        when(aiAnalysisClient.analyze(any(), any())).thenReturn(sampleDraft());
+        when(aiAnalysisClient.getModelName()).thenReturn("fake-model");
+        when(aiAnalysisClient.getPromptVersion()).thenReturn("v1");
+        actingAs(ownerId);
+        AiAnalysisService.AnalysisRequestResult first = aiAnalysisService.requestAnalysis(meetingId);
+
+        meetingService.updateMeeting(meetingId, new MeetingUpdateRequest(null, null, "Updated content", null));
+        AiAnalysisService.AnalysisRequestResult second = aiAnalysisService.requestAnalysis(meetingId);
+
+        assertThat(second.reused()).isFalse();
+        assertThat(second.response().id()).isNotEqualTo(first.response().id());
+        verify(aiAnalysisClient, times(2)).analyze(any(), any());
+    }
+
+    @Test
+    void requestAnalysis_newAnalysisWhenScheduledAtChanges() {
+        Long projectId = createProjectAsOwner();
+        Long meetingId = createMeetingWithContent(projectId, "We discussed the roadmap.");
+        when(aiAnalysisClient.analyze(any(), any())).thenReturn(sampleDraft());
+        when(aiAnalysisClient.getModelName()).thenReturn("fake-model");
+        when(aiAnalysisClient.getPromptVersion()).thenReturn("v1");
+        actingAs(ownerId);
+        AiAnalysisService.AnalysisRequestResult first = aiAnalysisService.requestAnalysis(meetingId);
+
+        meetingService.updateMeeting(meetingId,
+                new MeetingUpdateRequest(null, LocalDateTime.of(2026, 9, 8, 9, 0), null, null));
+        AiAnalysisService.AnalysisRequestResult second = aiAnalysisService.requestAnalysis(meetingId);
+
+        assertThat(second.reused()).isFalse();
+        assertThat(second.response().id()).isNotEqualTo(first.response().id());
+        verify(aiAnalysisClient, times(2)).analyze(any(), any());
+    }
+
+    @Test
+    void requestAnalysis_newAnalysisWhenModelChanges() {
+        Long projectId = createProjectAsOwner();
+        Long meetingId = createMeetingWithContent(projectId, "We discussed the roadmap.");
+        when(aiAnalysisClient.analyze(any(), any())).thenReturn(sampleDraft());
+        when(aiAnalysisClient.getPromptVersion()).thenReturn("v1");
+        when(aiAnalysisClient.getModelName()).thenReturn("fake-model");
+        actingAs(ownerId);
+        AiAnalysisService.AnalysisRequestResult first = aiAnalysisService.requestAnalysis(meetingId);
+
+        when(aiAnalysisClient.getModelName()).thenReturn("fake-model-v2");
+        AiAnalysisService.AnalysisRequestResult second = aiAnalysisService.requestAnalysis(meetingId);
+
+        assertThat(second.reused()).isFalse();
+        assertThat(second.response().id()).isNotEqualTo(first.response().id());
+        assertThat(second.response().modelName()).isEqualTo("fake-model-v2");
+        verify(aiAnalysisClient, times(2)).analyze(any(), any());
+    }
+
+    @Test
+    void requestAnalysis_newAnalysisWhenPromptVersionChanges() {
+        Long projectId = createProjectAsOwner();
+        Long meetingId = createMeetingWithContent(projectId, "We discussed the roadmap.");
+        when(aiAnalysisClient.analyze(any(), any())).thenReturn(sampleDraft());
+        when(aiAnalysisClient.getModelName()).thenReturn("fake-model");
+        when(aiAnalysisClient.getPromptVersion()).thenReturn("v1");
+        actingAs(ownerId);
+        AiAnalysisService.AnalysisRequestResult first = aiAnalysisService.requestAnalysis(meetingId);
+
+        when(aiAnalysisClient.getPromptVersion()).thenReturn("v2");
+        AiAnalysisService.AnalysisRequestResult second = aiAnalysisService.requestAnalysis(meetingId);
+
+        assertThat(second.reused()).isFalse();
+        assertThat(second.response().id()).isNotEqualTo(first.response().id());
+        assertThat(second.response().promptVersion()).isEqualTo("v2");
+        verify(aiAnalysisClient, times(2)).analyze(any(), any());
     }
 
     @Test

@@ -29,7 +29,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Directly exercises AiAnalysisRunTransactionService's short PROCESSING -> GENERATED/FAILED
- * transactions, independent of the external AI call which lives in AiAnalysisService.
+ * transactions and duplicate-request reuse logic, independent of the external AI call which
+ * lives in AiAnalysisService.
  */
 @SpringBootTest
 @Transactional
@@ -167,5 +168,75 @@ class AiAnalysisRunTransactionServiceTest {
         assertThat(run.getStatus()).isEqualTo(AnalysisStatus.FAILED);
         assertThat(run.getErrorMessage()).isEqualTo("Gemini API request failed");
         assertThat(run.getDraftJson()).isNull();
+    }
+
+    @Test
+    void startAnalysis_storesSha256HashNotRawContent() {
+        Long projectId = createProjectAsOwner();
+        String content = "This is the raw meeting content that must never be stored verbatim.";
+        Long meetingId = createMeetingWithContent(projectId, content);
+
+        AiAnalysisRunTransactionService.AnalysisStart result = start(meetingId);
+
+        AiAnalysisRun run = aiAnalysisRunRepository.findById(result.analysisId()).orElseThrow();
+        assertThat(run.getInputHash())
+                .isNotNull()
+                .hasSize(64)
+                .matches("[0-9a-f]{64}")
+                .isNotEqualTo(content);
+    }
+
+    @Test
+    void startAnalysis_reusesGeneratedRunForIdenticalInput() {
+        Long projectId = createProjectAsOwner();
+        Long meetingId = createMeetingWithContent(projectId, "Some content");
+        AiAnalysisRunTransactionService.AnalysisStart first = start(meetingId);
+        aiAnalysisRunTransactionService.completeWithSuccess(first.analysisId(), "{}");
+
+        AiAnalysisRunTransactionService.AnalysisStart second = start(meetingId);
+
+        assertThat(second.reused()).isTrue();
+        assertThat(second.analysisId()).isEqualTo(first.analysisId());
+        assertThat(aiAnalysisRunRepository.findAllByMeetingIdOrderByCreatedAtDesc(meetingId)).hasSize(1);
+    }
+
+    @Test
+    void startAnalysis_reusesProcessingRunWithoutCreatingAnotherRow() {
+        Long projectId = createProjectAsOwner();
+        Long meetingId = createMeetingWithContent(projectId, "Some content");
+        AiAnalysisRunTransactionService.AnalysisStart first = start(meetingId);
+
+        AiAnalysisRunTransactionService.AnalysisStart second = start(meetingId);
+
+        assertThat(second.reused()).isTrue();
+        assertThat(second.analysisId()).isEqualTo(first.analysisId());
+        assertThat(aiAnalysisRunRepository.findAllByMeetingIdOrderByCreatedAtDesc(meetingId)).hasSize(1);
+    }
+
+    @Test
+    void startAnalysis_doesNotReuseFailedRun() {
+        Long projectId = createProjectAsOwner();
+        Long meetingId = createMeetingWithContent(projectId, "Some content");
+        AiAnalysisRunTransactionService.AnalysisStart first = start(meetingId);
+        aiAnalysisRunTransactionService.completeWithFailure(first.analysisId(), "boom");
+
+        AiAnalysisRunTransactionService.AnalysisStart second = start(meetingId);
+
+        assertThat(second.reused()).isFalse();
+        assertThat(second.analysisId()).isNotEqualTo(first.analysisId());
+        assertThat(aiAnalysisRunRepository.findAllByMeetingIdOrderByCreatedAtDesc(meetingId)).hasSize(2);
+    }
+
+    @Test
+    void startAnalysis_newRunWhenModelDiffersFromReusableCandidate() {
+        Long projectId = createProjectAsOwner();
+        Long meetingId = createMeetingWithContent(projectId, "Some content");
+        AiAnalysisRunTransactionService.AnalysisStart first = start(meetingId);
+        aiAnalysisRunTransactionService.completeWithSuccess(first.analysisId(), "{}");
+
+        AiAnalysisRunTransactionService.AnalysisStart second =
+                aiAnalysisRunTransactionService.startAnalysis(meetingId, ownerId, "different-model", PROMPT_VERSION);
+
+        assertThat(second.reused()).isFalse();
     }
 }

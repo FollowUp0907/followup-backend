@@ -49,6 +49,10 @@ public class AiAnalysisRun {
     @Column(name = "prompt_version", length = 30)
     private String promptVersion;
 
+    // content+scheduledAt을 SHA-256으로 지문화한 값. 중복 분석 감지에 쓰이며 원문은 저장하지 않는다.
+    @Column(name = "input_hash", length = 64)
+    private String inputHash;
+
     @Column(name = "draft_json", columnDefinition = "JSON")
     private String draftJson;
 
@@ -63,12 +67,14 @@ public class AiAnalysisRun {
 
     @Builder
     public AiAnalysisRun(Meeting meeting, User requestedBy, AnalysisStatus status, String modelName,
-                          String promptVersion, String draftJson, String errorMessage, LocalDateTime confirmedAt) {
+                          String promptVersion, String inputHash, String draftJson, String errorMessage,
+                          LocalDateTime confirmedAt) {
         this.meeting = meeting;
         this.requestedBy = requestedBy;
         this.status = status;
         this.modelName = modelName;
         this.promptVersion = promptVersion;
+        this.inputHash = inputHash;
         this.draftJson = draftJson;
         this.errorMessage = errorMessage;
         this.confirmedAt = confirmedAt;
