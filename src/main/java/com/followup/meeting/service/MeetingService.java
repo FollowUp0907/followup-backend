@@ -167,6 +167,7 @@ public class MeetingService {
         return ids == null ? List.of() : ids.stream().distinct().toList();
     }
 
+    /** participant는 프로젝트 멤버만 지정할 수 있다. */
     private void validateParticipants(Long projectId, List<Long> participantIds) {
         for (Long userId : participantIds) {
             if (!projectMemberRepository.existsByProjectIdAndUserId(projectId, userId)) {
@@ -175,6 +176,7 @@ public class MeetingService {
         }
     }
 
+    /** 사용자가 선택한 TODO/IN_PROGRESS ActionItem만 carryOver로 연결하며, 미완료 업무 전체를 자동으로 끌어오지 않는다. */
     private List<ActionItem> resolveCarryOverActionItems(Long projectId, List<Long> actionItemIds) {
         if (actionItemIds.isEmpty()) {
             return List.of();

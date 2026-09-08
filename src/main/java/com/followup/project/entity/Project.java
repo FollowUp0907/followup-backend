@@ -51,6 +51,7 @@ public class Project {
         this.createdBy = createdBy;
     }
 
+    /** null 인자는 값을 지우지 않고 기존 값을 유지한다(PATCH 방식). */
     public void update(String name, String description) {
         if (name != null) {
             this.name = name;
