@@ -74,6 +74,17 @@ public class AiAnalysisRun {
         this.confirmedAt = confirmedAt;
     }
 
+    public void markGenerated(String draftJson) {
+        this.status = AnalysisStatus.GENERATED;
+        this.draftJson = draftJson;
+    }
+
+    /** row는 삭제하지 않고 상태만 FAILED로 남겨 재시도·이력 확인이 가능하게 한다. */
+    public void markFailed(String errorMessage) {
+        this.status = AnalysisStatus.FAILED;
+        this.errorMessage = errorMessage;
+    }
+
     @PrePersist
     void prePersist() {
         createdAt = LocalDateTime.now();

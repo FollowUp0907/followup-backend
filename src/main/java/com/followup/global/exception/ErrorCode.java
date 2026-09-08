@@ -21,6 +21,9 @@ public enum ErrorCode {
     ACTION_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "Action item not found"),
     INVALID_ACTION_ITEM_ASSIGNEE(HttpStatus.BAD_REQUEST, "Assignee must be a member of this project"),
     INVALID_ACTION_ITEM_STATUS(HttpStatus.BAD_REQUEST, "Invalid action item status"),
+    ANALYSIS_NOT_FOUND(HttpStatus.NOT_FOUND, "Analysis not found"),
+    MEETING_CONTENT_EMPTY(HttpStatus.BAD_REQUEST, "Meeting content is empty"),
+    AI_ANALYSIS_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "AI analysis failed"),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
 
     private final HttpStatus status;
