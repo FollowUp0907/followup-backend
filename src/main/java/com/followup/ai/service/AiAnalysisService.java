@@ -1,14 +1,29 @@
 package com.followup.ai.service;
 
+import com.followup.actionitem.entity.ActionItem;
+import com.followup.actionitem.entity.ActionItemStatus;
+import com.followup.actionitem.entity.Priority;
+import com.followup.actionitem.repository.ActionItemRepository;
 import com.followup.ai.client.AiAnalysisClient;
 import com.followup.ai.dto.AiDraftResult;
+import com.followup.ai.dto.AnalysisConfirmRequest;
+import com.followup.ai.dto.AnalysisConfirmRequest.ActionItemConfirmItem;
+import com.followup.ai.dto.AnalysisConfirmRequest.DecisionConfirmItem;
 import com.followup.ai.dto.AnalysisResponse;
 import com.followup.ai.entity.AiAnalysisRun;
+import com.followup.ai.entity.AnalysisStatus;
 import com.followup.ai.repository.AiAnalysisRunRepository;
 import com.followup.global.exception.BusinessException;
 import com.followup.global.exception.ErrorCode;
 import com.followup.global.security.CurrentUserProvider;
+import com.followup.meeting.entity.Decision;
+import com.followup.meeting.entity.Meeting;
+import com.followup.meeting.repository.DecisionRepository;
+import com.followup.project.entity.Project;
 import com.followup.project.repository.ProjectMemberRepository;
+import com.followup.user.entity.User;
+import com.followup.user.repository.UserRepository;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,9 +39,12 @@ import tools.jackson.databind.ObjectMapper;
 public class AiAnalysisService {
 
     private final AiAnalysisRunRepository aiAnalysisRunRepository;
+    private final DecisionRepository decisionRepository;
+    private final ActionItemRepository actionItemRepository;
+    private final ProjectMemberRepository projectMemberRepository;
+    private final UserRepository userRepository;
     private final AiAnalysisClient aiAnalysisClient;
     private final AiAnalysisRunTransactionService aiAnalysisRunTransactionService;
-    private final ProjectMemberRepository projectMemberRepository;
     private final CurrentUserProvider currentUserProvider;
     private final ObjectMapper objectMapper;
 
@@ -59,12 +77,69 @@ public class AiAnalysisService {
         return AnalysisResponse.of(run, readJson(run.getDraftJson()));
     }
 
+    /** GENERATED 상태에서만 확정할 수 있고, 저장된 draftJson이 아니라 request body를 기준으로 생성한다. */
+    @Transactional
+    public AnalysisResponse confirmAnalysis(Long analysisId, AnalysisConfirmRequest request) {
+        AiAnalysisRun run = getAnalysisOrThrow(analysisId);
+        Meeting meeting = run.getMeeting();
+        Project project = meeting.getProject();
+        requireMember(project.getId(), currentUserProvider.getCurrentUserId());
+
+        if (run.getStatus() == AnalysisStatus.CONFIRMED) {
+            throw new BusinessException(ErrorCode.ANALYSIS_ALREADY_CONFIRMED);
+        }
+        if (run.getStatus() != AnalysisStatus.GENERATED) {
+            throw new BusinessException(ErrorCode.ANALYSIS_NOT_CONFIRMABLE);
+        }
+
+        for (DecisionConfirmItem item : orEmpty(request.decisions())) {
+            decisionRepository.save(Decision.builder()
+                    .meeting(meeting)
+                    .content(item.content())
+                    .sourceAnalysis(run)
+                    .build());
+        }
+
+        for (ActionItemConfirmItem item : orEmpty(request.actionItems())) {
+            actionItemRepository.save(ActionItem.builder()
+                    .project(project)
+                    .originMeeting(meeting)
+                    .assignee(resolveAssignee(project.getId(), item.assigneeUserId()))
+                    .sourceAnalysis(run)
+                    .title(item.title())
+                    .description(item.description())
+                    .dueDate(item.dueDate())
+                    .status(ActionItemStatus.TODO)
+                    .priority(item.priority() != null ? item.priority() : Priority.MEDIUM)
+                    .priorityReason(item.priorityReason())
+                    .build());
+        }
+
+        run.confirm();
+
+        return AnalysisResponse.of(run, readJson(run.getDraftJson()));
+    }
+
     private String writeJson(AiDraftResult draft) {
         return objectMapper.writeValueAsString(draft);
     }
 
     private AiDraftResult readJson(String draftJson) {
         return draftJson != null ? objectMapper.readValue(draftJson, AiDraftResult.class) : null;
+    }
+
+    private <T> List<T> orEmpty(List<T> list) {
+        return list == null ? List.of() : list;
+    }
+
+    private User resolveAssignee(Long projectId, Long assigneeUserId) {
+        if (assigneeUserId == null) {
+            return null;
+        }
+        if (!projectMemberRepository.existsByProjectIdAndUserId(projectId, assigneeUserId)) {
+            throw new BusinessException(ErrorCode.INVALID_ANALYSIS_ASSIGNEE);
+        }
+        return userRepository.getReferenceById(assigneeUserId);
     }
 
     private AiAnalysisRun getAnalysisOrThrow(Long analysisId) {

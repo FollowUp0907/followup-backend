@@ -85,6 +85,12 @@ public class AiAnalysisRun {
         this.errorMessage = errorMessage;
     }
 
+    /** GENERATED 상태에서만 유효한 확정 전이다(조건은 AiAnalysisService에서 검사). */
+    public void confirm() {
+        this.status = AnalysisStatus.CONFIRMED;
+        this.confirmedAt = LocalDateTime.now();
+    }
+
     @PrePersist
     void prePersist() {
         createdAt = LocalDateTime.now();

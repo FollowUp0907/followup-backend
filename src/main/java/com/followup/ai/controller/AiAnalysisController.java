@@ -1,14 +1,17 @@
 package com.followup.ai.controller;
 
+import com.followup.ai.dto.AnalysisConfirmRequest;
 import com.followup.ai.dto.AnalysisResponse;
 import com.followup.ai.service.AiAnalysisService;
 import com.followup.ai.service.AiAnalysisService.AnalysisRequestResult;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -29,5 +32,11 @@ public class AiAnalysisController {
     @GetMapping("/analysis/{analysisId}")
     public ResponseEntity<AnalysisResponse> getAnalysis(@PathVariable Long analysisId) {
         return ResponseEntity.ok(aiAnalysisService.getAnalysis(analysisId));
+    }
+
+    @PostMapping("/analysis/{analysisId}/confirm")
+    public ResponseEntity<AnalysisResponse> confirmAnalysis(@PathVariable Long analysisId,
+                                                             @Valid @RequestBody AnalysisConfirmRequest request) {
+        return ResponseEntity.ok(aiAnalysisService.confirmAnalysis(analysisId, request));
     }
 }
