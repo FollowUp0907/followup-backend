@@ -1,12 +1,20 @@
 package com.followup.global.security;
 
+import com.followup.global.exception.BusinessException;
+import com.followup.global.exception.ErrorCode;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
-// TEMPORARY: 인증 구현 전까지 항상 user id 1로 동작한다. 인증 추가 시 이 메서드만 교체하면 된다.
+/** SecurityContext에 저장된 인증 사용자의 userId를 반환한다. */
 @Component
 public class CurrentUserProvider {
 
     public Long getCurrentUserId() {
-        return 1L;
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Long userId)) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+        return userId;
     }
 }
