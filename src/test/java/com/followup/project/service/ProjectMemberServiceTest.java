@@ -221,4 +221,19 @@ class ProjectMemberServiceTest {
         ActionItem reloaded = actionItemRepository.findById(actionItem.getId()).orElseThrow();
         assertThat(reloaded.getAssignee()).isNull();
     }
+
+    @Test
+    void removeMember_revokesProjectAccessImmediately() {
+        Long projectId = createProjectAsOwner();
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
+
+        projectMemberService.removeMember(projectId, memberId);
+
+        actingAs(memberId);
+
+        assertThatThrownBy(() -> projectService.getProject(projectId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROJECT_ACCESS_DENIED);
+    }
 }
