@@ -35,6 +35,7 @@ public class ActionItemService {
     private final MeetingActionLinkRepository meetingActionLinkRepository;
     private final CurrentUserProvider currentUserProvider;
 
+    /** {@code status=active}는 TODO + IN_PROGRESS를 뜻하는 가상 필터다({@link ActionItemStatus} 값 아님). */
     @Transactional(readOnly = true)
     public List<ActionItemListResDto> getActionItems(Long projectId, String status, Long assigneeId, Priority priority) {
         getProjectOrThrow(projectId);
@@ -106,6 +107,7 @@ public class ActionItemService {
         return ActionItemDetailResDto.from(actionItem);
     }
 
+    /** MeetingActionLink만 제거하고 연결된 Meeting은 유지한다. */
     @Transactional
     public void deleteActionItem(Long actionItemId) {
         ActionItem actionItem = getActionItemOrThrow(actionItemId);
@@ -123,6 +125,7 @@ public class ActionItemService {
         }
     }
 
+    /** 담당자는 같은 프로젝트 멤버만 지정할 수 있다. */
     private User resolveAssignee(Long projectId, Long assigneeUserId) {
         if (assigneeUserId == null) {
             return null;

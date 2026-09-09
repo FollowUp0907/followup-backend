@@ -38,6 +38,7 @@ public class ProjectMemberService {
                 .toList();
     }
 
+    /** OWNER만 가능하며, 이미 가입된 사용자를 email로 찾아 추가한다. 미가입 email은 404로 처리한다. */
     @Transactional
     public ProjectMemberResDto addMember(Long projectId, ProjectMemberCreateReqDto request) {
         Project project = getProjectOrThrow(projectId);
@@ -60,6 +61,10 @@ public class ProjectMemberService {
         return ProjectMemberResDto.from(member);
     }
 
+    /**
+     * OWNER만 가능하며, OWNER 역할은 제거할 수 없다(소유권 이전 기능이 아직 없음).
+     * 제거되는 멤버가 담당 중이던 ActionItem은 assignee를 함께 해제한다.
+     */
     @Transactional
     public void removeMember(Long projectId, Long userId) {
         getProjectOrThrow(projectId);

@@ -2,9 +2,7 @@ package com.followup.global.security;
 
 import org.springframework.stereotype.Component;
 
-// TEMPORARY: hardcoded until JWT/Security is implemented. Not safe for real multi-user deployment —
-// every request currently acts as user id 1. Replace getCurrentUserId() with a SecurityContext lookup
-// when auth is added; nothing else in the codebase should need to change.
+// TEMPORARY: 인증 구현 전까지 항상 user id 1로 동작한다. 인증 추가 시 이 메서드만 교체하면 된다.
 @Component
 public class CurrentUserProvider {
 

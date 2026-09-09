@@ -128,6 +128,7 @@ public class ActionItem {
         }
     }
 
+    /** DONE 전환 시 completedAt을 설정하고, DONE 해제 시 null로 되돌린다. */
     public void changeStatus(ActionItemStatus newStatus) {
         this.status = newStatus;
         this.completedAt = newStatus == ActionItemStatus.DONE ? LocalDateTime.now() : null;

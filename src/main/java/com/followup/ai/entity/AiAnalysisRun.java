@@ -49,6 +49,10 @@ public class AiAnalysisRun {
     @Column(name = "prompt_version", length = 30)
     private String promptVersion;
 
+    // content+scheduledAt을 SHA-256으로 지문화한 값. 중복 분석 감지에 쓰이며 원문은 저장하지 않는다.
+    @Column(name = "input_hash", length = 64)
+    private String inputHash;
+
     @Column(name = "draft_json", columnDefinition = "JSON")
     private String draftJson;
 
@@ -63,15 +67,34 @@ public class AiAnalysisRun {
 
     @Builder
     public AiAnalysisRun(Meeting meeting, User requestedBy, AnalysisStatus status, String modelName,
-                          String promptVersion, String draftJson, String errorMessage, LocalDateTime confirmedAt) {
+                          String promptVersion, String inputHash, String draftJson, String errorMessage,
+                          LocalDateTime confirmedAt) {
         this.meeting = meeting;
         this.requestedBy = requestedBy;
         this.status = status;
         this.modelName = modelName;
         this.promptVersion = promptVersion;
+        this.inputHash = inputHash;
         this.draftJson = draftJson;
         this.errorMessage = errorMessage;
         this.confirmedAt = confirmedAt;
+    }
+
+    public void markGenerated(String draftJson) {
+        this.status = AnalysisStatus.GENERATED;
+        this.draftJson = draftJson;
+    }
+
+    /** row는 삭제하지 않고 상태만 FAILED로 남겨 재시도·이력 확인이 가능하게 한다. */
+    public void markFailed(String errorMessage) {
+        this.status = AnalysisStatus.FAILED;
+        this.errorMessage = errorMessage;
+    }
+
+    /** GENERATED 상태에서만 유효한 확정 전이다(조건은 AiAnalysisService에서 검사). */
+    public void confirm() {
+        this.status = AnalysisStatus.CONFIRMED;
+        this.confirmedAt = LocalDateTime.now();
     }
 
     @PrePersist

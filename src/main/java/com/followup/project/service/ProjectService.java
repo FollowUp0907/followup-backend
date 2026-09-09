@@ -31,6 +31,10 @@ public class ProjectService {
     private final ActionItemRepository actionItemRepository;
     private final CurrentUserProvider currentUserProvider;
 
+    /**
+     * 생성자를 OWNER {@link ProjectMember}로 함께 등록한다.
+     * 접근 권한이 멤버십 기준으로 검사되므로, OWNER가 없으면 생성자도 접근할 수 없다.
+     */
     @Transactional
     public ProjectResDto createProject(ProjectCreateReqDto request) {
         Long currentUserId = currentUserProvider.getCurrentUserId();
@@ -72,6 +76,7 @@ public class ProjectService {
         return ProjectResDto.from(project);
     }
 
+    /** OWNER만 프로젝트 정보를 수정할 수 있다. */
     @Transactional
     public ProjectResDto updateProject(Long projectId, ProjectUpdateReqDto request) {
         Project project = getProjectOrThrow(projectId);
@@ -85,6 +90,10 @@ public class ProjectService {
         return ProjectResDto.from(project);
     }
 
+    /**
+     * OWNER만 삭제할 수 있으며, Meeting/ActionItem이 남아 있으면 409로 막는다.
+     * cascade 삭제를 두지 않았으므로 실제 업무 데이터를 먼저 정리해야 한다.
+     */
     @Transactional
     public void deleteProject(Long projectId) {
         Project project = getProjectOrThrow(projectId);
