@@ -1,7 +1,7 @@
 package com.followup.project.controller;
 
-import com.followup.project.dto.ProjectMemberCreateRequest;
-import com.followup.project.dto.ProjectMemberResponse;
+import com.followup.project.dto.ProjectMemberCreateReqDto;
+import com.followup.project.dto.ProjectMemberResDto;
 import com.followup.project.service.ProjectMemberService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -24,13 +24,13 @@ public class ProjectMemberController {
     private final ProjectMemberService projectMemberService;
 
     @GetMapping("/members")
-    public ResponseEntity<List<ProjectMemberResponse>> getMembers(@PathVariable Long projectId) {
+    public ResponseEntity<List<ProjectMemberResDto>> getMembers(@PathVariable Long projectId) {
         return ResponseEntity.ok(projectMemberService.getMembers(projectId));
     }
 
     @PostMapping("/member")
-    public ResponseEntity<ProjectMemberResponse> addMember(@PathVariable Long projectId,
-                                                            @Valid @RequestBody ProjectMemberCreateRequest request) {
+    public ResponseEntity<ProjectMemberResDto> addMember(@PathVariable Long projectId,
+                                                            @Valid @RequestBody ProjectMemberCreateReqDto request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(projectMemberService.addMember(projectId, request));
     }
 

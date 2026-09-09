@@ -8,10 +8,10 @@ import com.followup.actionitem.repository.MeetingActionLinkRepository;
 import com.followup.global.exception.BusinessException;
 import com.followup.global.exception.ErrorCode;
 import com.followup.global.security.CurrentUserProvider;
-import com.followup.meeting.dto.MeetingCreateRequest;
-import com.followup.meeting.dto.MeetingDetailResponse;
-import com.followup.meeting.dto.MeetingListResponse;
-import com.followup.meeting.dto.MeetingUpdateRequest;
+import com.followup.meeting.dto.MeetingCreateReqDto;
+import com.followup.meeting.dto.MeetingDetailResDto;
+import com.followup.meeting.dto.MeetingListResDto;
+import com.followup.meeting.dto.MeetingUpdateReqDto;
 import com.followup.meeting.entity.Meeting;
 import com.followup.meeting.entity.MeetingParticipant;
 import com.followup.meeting.entity.MeetingStatus;
@@ -43,7 +43,7 @@ public class MeetingService {
     private final CurrentUserProvider currentUserProvider;
 
     @Transactional
-    public MeetingDetailResponse createMeeting(Long projectId, MeetingCreateRequest request) {
+    public MeetingDetailResDto createMeeting(Long projectId, MeetingCreateReqDto request) {
         Project project = getProjectOrThrow(projectId);
         requireMember(projectId, currentUserProvider.getCurrentUserId());
 
@@ -77,21 +77,21 @@ public class MeetingService {
                 .linkType(CARRY_OVER_LINK_TYPE)
                 .build()));
 
-        return MeetingDetailResponse.from(meeting, participants, carryOverItems);
+        return MeetingDetailResDto.from(meeting, participants, carryOverItems);
     }
 
     @Transactional(readOnly = true)
-    public List<MeetingListResponse> getMeetings(Long projectId) {
+    public List<MeetingListResDto> getMeetings(Long projectId) {
         getProjectOrThrow(projectId);
         requireMember(projectId, currentUserProvider.getCurrentUserId());
 
         return meetingRepository.findAllByProjectIdOrderByScheduledAtDesc(projectId).stream()
-                .map(MeetingListResponse::from)
+                .map(MeetingListResDto::from)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public MeetingDetailResponse getMeeting(Long meetingId) {
+    public MeetingDetailResDto getMeeting(Long meetingId) {
         Meeting meeting = getMeetingOrThrow(meetingId);
         requireMember(meeting.getProject().getId(), currentUserProvider.getCurrentUserId());
 
@@ -100,11 +100,11 @@ public class MeetingService {
                 .map(MeetingActionLink::getActionItem)
                 .toList();
 
-        return MeetingDetailResponse.from(meeting, participants, carryOverItems);
+        return MeetingDetailResDto.from(meeting, participants, carryOverItems);
     }
 
     @Transactional
-    public MeetingDetailResponse updateMeeting(Long meetingId, MeetingUpdateRequest request) {
+    public MeetingDetailResDto updateMeeting(Long meetingId, MeetingUpdateReqDto request) {
         Meeting meeting = getMeetingOrThrow(meetingId);
         Long projectId = meeting.getProject().getId();
         requireMember(projectId, currentUserProvider.getCurrentUserId());
@@ -135,7 +135,7 @@ public class MeetingService {
                 .map(MeetingActionLink::getActionItem)
                 .toList();
 
-        return MeetingDetailResponse.from(meeting, participants, carryOverItems);
+        return MeetingDetailResDto.from(meeting, participants, carryOverItems);
     }
 
     @Transactional

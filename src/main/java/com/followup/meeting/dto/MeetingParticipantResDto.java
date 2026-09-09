@@ -2,14 +2,14 @@ package com.followup.meeting.dto;
 
 import com.followup.meeting.entity.MeetingParticipant;
 
-public record MeetingParticipantResponse(
+public record MeetingParticipantResDto(
         Long userId,
         String name,
         String email
 ) {
 
-    public static MeetingParticipantResponse from(MeetingParticipant participant) {
-        return new MeetingParticipantResponse(
+    public static MeetingParticipantResDto from(MeetingParticipant participant) {
+        return new MeetingParticipantResDto(
                 participant.getUser().getId(),
                 participant.getUser().getName(),
                 participant.getUser().getEmail()

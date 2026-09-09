@@ -4,7 +4,7 @@ import com.followup.project.entity.ProjectMember;
 import com.followup.project.entity.ProjectRole;
 import java.time.LocalDateTime;
 
-public record ProjectMemberResponse(
+public record ProjectMemberResDto(
         Long userId,
         String name,
         String email,
@@ -12,8 +12,8 @@ public record ProjectMemberResponse(
         LocalDateTime joinedAt
 ) {
 
-    public static ProjectMemberResponse from(ProjectMember member) {
-        return new ProjectMemberResponse(
+    public static ProjectMemberResDto from(ProjectMember member) {
+        return new ProjectMemberResDto(
                 member.getUser().getId(),
                 member.getUser().getName(),
                 member.getUser().getEmail(),
