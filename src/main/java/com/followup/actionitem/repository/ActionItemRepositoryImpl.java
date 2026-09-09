@@ -1,6 +1,7 @@
 package com.followup.actionitem.repository;
 
 import static com.followup.actionitem.entity.QActionItem.actionItem;
+import static com.followup.user.entity.QUser.user;
 
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
@@ -42,6 +43,15 @@ public class ActionItemRepositoryImpl implements ActionItemRepositoryCustom {
                         priorityEq(priority)
                 )
                 .orderBy(actionItem.createdAt.desc())
+                .fetch();
+    }
+
+    @Override
+    public List<ActionItem> findAllByProjectIdFetchAssignee(Long projectId) {
+        return queryFactory
+                .selectFrom(actionItem)
+                .leftJoin(actionItem.assignee, user).fetchJoin()
+                .where(projectIdEq(projectId))
                 .fetch();
     }
 
