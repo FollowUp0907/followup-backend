@@ -488,6 +488,10 @@ class AiAnalysisServiceTest {
         assertThat(decisions.get(0).getContent()).isEqualTo("다음 스프린트에서 알림 기능을 우선 개발한다.");
         assertThat(decisions.get(0).getMeeting().getId()).isEqualTo(meetingId);
         assertThat(decisions.get(0).getSourceAnalysis().getId()).isEqualTo(generated.id());
+
+        assertThat(meetingService.getMeeting(meetingId).decisions())
+                .extracting("content")
+                .containsExactly("다음 스프린트에서 알림 기능을 우선 개발한다.");
     }
 
     @Test

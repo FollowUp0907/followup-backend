@@ -253,6 +253,50 @@ class MeetingServiceTest {
     }
 
     @Test
+    void getMeeting_noDecisions_returnsEmptyList() {
+        Long projectId = createProjectAsOwner();
+        actingAs(ownerId);
+        MeetingDetailResDto created = meetingService.createMeeting(projectId, baseRequest(null, null));
+
+        MeetingDetailResDto fetched = meetingService.getMeeting(created.id());
+
+        assertThat(fetched.decisions()).isEmpty();
+    }
+
+    @Test
+    void getMeeting_returnsAllDecisionsInCreationOrder() {
+        Long projectId = createProjectAsOwner();
+        actingAs(ownerId);
+        MeetingDetailResDto created = meetingService.createMeeting(projectId, baseRequest(null, null));
+        Decision first = decisionRepository.save(Decision.builder()
+                .meeting(meetingRepository.getReferenceById(created.id())).content("Decision A").build());
+        Decision second = decisionRepository.save(Decision.builder()
+                .meeting(meetingRepository.getReferenceById(created.id())).content("Decision B").build());
+
+        MeetingDetailResDto fetched = meetingService.getMeeting(created.id());
+
+        assertThat(fetched.decisions()).hasSize(2);
+        assertThat(fetched.decisions().get(0).id()).isEqualTo(first.getId());
+        assertThat(fetched.decisions().get(0).content()).isEqualTo("Decision A");
+        assertThat(fetched.decisions().get(1).id()).isEqualTo(second.getId());
+        assertThat(fetched.decisions().get(1).content()).isEqualTo("Decision B");
+    }
+
+    @Test
+    void getMeeting_doesNotMixDecisionsFromOtherMeetings() {
+        Long projectId = createProjectAsOwner();
+        actingAs(ownerId);
+        MeetingDetailResDto meetingA = meetingService.createMeeting(projectId, baseRequest(null, null));
+        MeetingDetailResDto meetingB = meetingService.createMeeting(projectId, baseRequest(null, null));
+        decisionRepository.save(Decision.builder()
+                .meeting(meetingRepository.getReferenceById(meetingB.id())).content("Only for B").build());
+
+        MeetingDetailResDto fetchedA = meetingService.getMeeting(meetingA.id());
+
+        assertThat(fetchedA.decisions()).isEmpty();
+    }
+
+    @Test
     void updateMeeting_success() {
         Long projectId = createProjectAsOwner();
         actingAs(ownerId);
