@@ -1,27 +1,29 @@
-package com.followup.meeting.dto;
+package com.followup.actionitem.dto;
 
 import com.followup.actionitem.entity.ActionItem;
 import com.followup.actionitem.entity.ActionItemStatus;
 import com.followup.actionitem.entity.Priority;
 import java.time.LocalDate;
 
-public record CarryOverActionItemResponse(
-        Long actionItemId,
+public record ActionItemListResDto(
+        Long id,
         String title,
         ActionItemStatus status,
+        Priority priority,
         Long assigneeUserId,
         LocalDate dueDate,
-        Priority priority
+        Long projectId
 ) {
 
-    public static CarryOverActionItemResponse from(ActionItem actionItem) {
-        return new CarryOverActionItemResponse(
+    public static ActionItemListResDto from(ActionItem actionItem) {
+        return new ActionItemListResDto(
                 actionItem.getId(),
                 actionItem.getTitle(),
                 actionItem.getStatus(),
+                actionItem.getPriority(),
                 actionItem.getAssignee() != null ? actionItem.getAssignee().getId() : null,
                 actionItem.getDueDate(),
-                actionItem.getPriority()
+                actionItem.getProject().getId()
         );
     }
 }

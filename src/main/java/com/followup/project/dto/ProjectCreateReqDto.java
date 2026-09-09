@@ -1,9 +1,11 @@
 package com.followup.project.dto;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-public record ProjectUpdateRequest(
+public record ProjectCreateReqDto(
 
+        @NotBlank
         @Size(max = 150)
         String name,
 

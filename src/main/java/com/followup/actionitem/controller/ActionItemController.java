@@ -1,9 +1,9 @@
 package com.followup.actionitem.controller;
 
-import com.followup.actionitem.dto.ActionItemCreateRequest;
-import com.followup.actionitem.dto.ActionItemDetailResponse;
-import com.followup.actionitem.dto.ActionItemListResponse;
-import com.followup.actionitem.dto.ActionItemUpdateRequest;
+import com.followup.actionitem.dto.ActionItemCreateReqDto;
+import com.followup.actionitem.dto.ActionItemDetailResDto;
+import com.followup.actionitem.dto.ActionItemListResDto;
+import com.followup.actionitem.dto.ActionItemUpdateReqDto;
 import com.followup.actionitem.entity.Priority;
 import com.followup.actionitem.service.ActionItemService;
 import jakarta.validation.Valid;
@@ -29,7 +29,7 @@ public class ActionItemController {
     private final ActionItemService actionItemService;
 
     @GetMapping("/project/{projectId}/action-items")
-    public ResponseEntity<List<ActionItemListResponse>> getActionItems(
+    public ResponseEntity<List<ActionItemListResDto>> getActionItems(
             @PathVariable Long projectId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) Long assigneeId,
@@ -38,22 +38,22 @@ public class ActionItemController {
     }
 
     @PostMapping("/project/{projectId}/action-item")
-    public ResponseEntity<ActionItemDetailResponse> createActionItem(
+    public ResponseEntity<ActionItemDetailResDto> createActionItem(
             @PathVariable Long projectId,
-            @Valid @RequestBody ActionItemCreateRequest request) {
+            @Valid @RequestBody ActionItemCreateReqDto request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(actionItemService.createActionItem(projectId, request));
     }
 
     @GetMapping("/action-item/{actionItemId}")
-    public ResponseEntity<ActionItemDetailResponse> getActionItem(@PathVariable Long actionItemId) {
+    public ResponseEntity<ActionItemDetailResDto> getActionItem(@PathVariable Long actionItemId) {
         return ResponseEntity.ok(actionItemService.getActionItem(actionItemId));
     }
 
     @PatchMapping("/action-item/{actionItemId}")
-    public ResponseEntity<ActionItemDetailResponse> updateActionItem(
+    public ResponseEntity<ActionItemDetailResDto> updateActionItem(
             @PathVariable Long actionItemId,
-            @Valid @RequestBody ActionItemUpdateRequest request) {
+            @Valid @RequestBody ActionItemUpdateReqDto request) {
         return ResponseEntity.ok(actionItemService.updateActionItem(actionItemId, request));
     }
 

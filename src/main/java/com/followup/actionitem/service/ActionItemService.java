@@ -1,9 +1,9 @@
 package com.followup.actionitem.service;
 
-import com.followup.actionitem.dto.ActionItemCreateRequest;
-import com.followup.actionitem.dto.ActionItemDetailResponse;
-import com.followup.actionitem.dto.ActionItemListResponse;
-import com.followup.actionitem.dto.ActionItemUpdateRequest;
+import com.followup.actionitem.dto.ActionItemCreateReqDto;
+import com.followup.actionitem.dto.ActionItemDetailResDto;
+import com.followup.actionitem.dto.ActionItemListResDto;
+import com.followup.actionitem.dto.ActionItemUpdateReqDto;
 import com.followup.actionitem.entity.ActionItem;
 import com.followup.actionitem.entity.ActionItemStatus;
 import com.followup.actionitem.entity.Priority;
@@ -36,7 +36,7 @@ public class ActionItemService {
     private final CurrentUserProvider currentUserProvider;
 
     @Transactional(readOnly = true)
-    public List<ActionItemListResponse> getActionItems(Long projectId, String status, Long assigneeId, Priority priority) {
+    public List<ActionItemListResDto> getActionItems(Long projectId, String status, Long assigneeId, Priority priority) {
         getProjectOrThrow(projectId);
         requireMember(projectId, currentUserProvider.getCurrentUserId());
 
@@ -49,11 +49,11 @@ public class ActionItemService {
             actionItems = actionItemRepository.search(projectId, parseStatus(status), assigneeId, priority);
         }
 
-        return actionItems.stream().map(ActionItemListResponse::from).toList();
+        return actionItems.stream().map(ActionItemListResDto::from).toList();
     }
 
     @Transactional
-    public ActionItemDetailResponse createActionItem(Long projectId, ActionItemCreateRequest request) {
+    public ActionItemDetailResDto createActionItem(Long projectId, ActionItemCreateReqDto request) {
         Project project = getProjectOrThrow(projectId);
         requireMember(projectId, currentUserProvider.getCurrentUserId());
 
@@ -74,18 +74,18 @@ public class ActionItemService {
                 .build();
         actionItemRepository.save(actionItem);
 
-        return ActionItemDetailResponse.from(actionItem);
+        return ActionItemDetailResDto.from(actionItem);
     }
 
     @Transactional(readOnly = true)
-    public ActionItemDetailResponse getActionItem(Long actionItemId) {
+    public ActionItemDetailResDto getActionItem(Long actionItemId) {
         ActionItem actionItem = getActionItemOrThrow(actionItemId);
         requireMember(actionItem.getProject().getId(), currentUserProvider.getCurrentUserId());
-        return ActionItemDetailResponse.from(actionItem);
+        return ActionItemDetailResDto.from(actionItem);
     }
 
     @Transactional
-    public ActionItemDetailResponse updateActionItem(Long actionItemId, ActionItemUpdateRequest request) {
+    public ActionItemDetailResDto updateActionItem(Long actionItemId, ActionItemUpdateReqDto request) {
         ActionItem actionItem = getActionItemOrThrow(actionItemId);
         Long projectId = actionItem.getProject().getId();
         requireMember(projectId, currentUserProvider.getCurrentUserId());
@@ -103,7 +103,7 @@ public class ActionItemService {
             actionItem.changeStatus(request.status());
         }
 
-        return ActionItemDetailResponse.from(actionItem);
+        return ActionItemDetailResDto.from(actionItem);
     }
 
     @Transactional

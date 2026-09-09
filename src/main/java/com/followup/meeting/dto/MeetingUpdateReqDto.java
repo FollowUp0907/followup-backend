@@ -4,7 +4,7 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
 import java.util.List;
 
-public record MeetingUpdateRequest(
+public record MeetingUpdateReqDto(
 
         @Size(max = 200)
         String title,

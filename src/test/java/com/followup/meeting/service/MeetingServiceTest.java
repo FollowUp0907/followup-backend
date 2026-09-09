@@ -12,15 +12,15 @@ import com.followup.actionitem.repository.MeetingActionLinkRepository;
 import com.followup.global.exception.BusinessException;
 import com.followup.global.exception.ErrorCode;
 import com.followup.global.security.CurrentUserProvider;
-import com.followup.meeting.dto.MeetingCreateRequest;
-import com.followup.meeting.dto.MeetingDetailResponse;
-import com.followup.meeting.dto.MeetingListResponse;
-import com.followup.meeting.dto.MeetingUpdateRequest;
+import com.followup.meeting.dto.MeetingCreateReqDto;
+import com.followup.meeting.dto.MeetingDetailResDto;
+import com.followup.meeting.dto.MeetingListResDto;
+import com.followup.meeting.dto.MeetingUpdateReqDto;
 import com.followup.meeting.entity.MeetingStatus;
 import com.followup.meeting.repository.MeetingRepository;
-import com.followup.project.dto.ProjectCreateRequest;
-import com.followup.project.dto.ProjectMemberCreateRequest;
-import com.followup.project.dto.ProjectResponse;
+import com.followup.project.dto.ProjectCreateReqDto;
+import com.followup.project.dto.ProjectMemberCreateReqDto;
+import com.followup.project.dto.ProjectResDto;
 import com.followup.project.repository.ProjectRepository;
 import com.followup.project.service.ProjectMemberService;
 import com.followup.project.service.ProjectService;
@@ -90,7 +90,7 @@ class MeetingServiceTest {
 
     private Long createProjectAsOwner() {
         actingAs(ownerId);
-        ProjectResponse project = projectService.createProject(new ProjectCreateRequest("Project", null));
+        ProjectResDto project = projectService.createProject(new ProjectCreateReqDto("Project", null));
         return project.id();
     }
 
@@ -103,18 +103,18 @@ class MeetingServiceTest {
                 .build());
     }
 
-    private MeetingCreateRequest baseRequest(List<Long> participantIds, List<Long> carryOverIds) {
-        return new MeetingCreateRequest("Weekly sync", LocalDateTime.of(2026, 9, 7, 14, 0), "notes",
+    private MeetingCreateReqDto baseRequest(List<Long> participantIds, List<Long> carryOverIds) {
+        return new MeetingCreateReqDto("Weekly sync", LocalDateTime.of(2026, 9, 7, 14, 0), "notes",
                 participantIds, carryOverIds);
     }
 
     @Test
     void createMeeting_successWithDraftStatusAndParticipants() {
         Long projectId = createProjectAsOwner();
-        projectMemberService.addMember(projectId, new ProjectMemberCreateRequest(memberEmail));
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
 
         actingAs(ownerId);
-        MeetingDetailResponse response = meetingService.createMeeting(
+        MeetingDetailResDto response = meetingService.createMeeting(
                 projectId, baseRequest(List.of(memberId), null));
 
         assertThat(response.status()).isEqualTo(MeetingStatus.DRAFT);
@@ -152,7 +152,7 @@ class MeetingServiceTest {
         ActionItem todo = createActionItem(projectId, ActionItemStatus.TODO);
 
         actingAs(ownerId);
-        MeetingDetailResponse response = meetingService.createMeeting(
+        MeetingDetailResDto response = meetingService.createMeeting(
                 projectId, baseRequest(null, List.of(todo.getId())));
 
         assertThat(response.carryOverActionItems()).hasSize(1);
@@ -165,7 +165,7 @@ class MeetingServiceTest {
         ActionItem inProgress = createActionItem(projectId, ActionItemStatus.IN_PROGRESS);
 
         actingAs(ownerId);
-        MeetingDetailResponse response = meetingService.createMeeting(
+        MeetingDetailResDto response = meetingService.createMeeting(
                 projectId, baseRequest(null, List.of(inProgress.getId())));
 
         assertThat(response.carryOverActionItems()).hasSize(1);
@@ -189,7 +189,7 @@ class MeetingServiceTest {
         Long projectId = createProjectAsOwner();
 
         actingAs(ownerId);
-        Long otherProjectId = projectService.createProject(new ProjectCreateRequest("Other", null)).id();
+        Long otherProjectId = projectService.createProject(new ProjectCreateReqDto("Other", null)).id();
         ActionItem otherProjectItem = createActionItem(otherProjectId, ActionItemStatus.TODO);
 
         assertThatThrownBy(() -> meetingService.createMeeting(
@@ -204,11 +204,11 @@ class MeetingServiceTest {
         Long projectId = createProjectAsOwner();
         actingAs(ownerId);
         meetingService.createMeeting(projectId,
-                new MeetingCreateRequest("Older", LocalDateTime.of(2026, 1, 1, 10, 0), null, null, null));
+                new MeetingCreateReqDto("Older", LocalDateTime.of(2026, 1, 1, 10, 0), null, null, null));
         meetingService.createMeeting(projectId,
-                new MeetingCreateRequest("Newer", LocalDateTime.of(2026, 6, 1, 10, 0), null, null, null));
+                new MeetingCreateReqDto("Newer", LocalDateTime.of(2026, 6, 1, 10, 0), null, null, null));
 
-        List<MeetingListResponse> meetings = meetingService.getMeetings(projectId);
+        List<MeetingListResDto> meetings = meetingService.getMeetings(projectId);
 
         assertThat(meetings).hasSize(2);
         assertThat(meetings.get(0).title()).isEqualTo("Newer");
@@ -219,9 +219,9 @@ class MeetingServiceTest {
     void getMeeting_success() {
         Long projectId = createProjectAsOwner();
         actingAs(ownerId);
-        MeetingDetailResponse created = meetingService.createMeeting(projectId, baseRequest(null, null));
+        MeetingDetailResDto created = meetingService.createMeeting(projectId, baseRequest(null, null));
 
-        MeetingDetailResponse fetched = meetingService.getMeeting(created.id());
+        MeetingDetailResDto fetched = meetingService.getMeeting(created.id());
 
         assertThat(fetched.id()).isEqualTo(created.id());
         assertThat(fetched.projectId()).isEqualTo(projectId);
@@ -231,7 +231,7 @@ class MeetingServiceTest {
     void getMeeting_nonMemberDenied() {
         Long projectId = createProjectAsOwner();
         actingAs(ownerId);
-        MeetingDetailResponse created = meetingService.createMeeting(projectId, baseRequest(null, null));
+        MeetingDetailResDto created = meetingService.createMeeting(projectId, baseRequest(null, null));
 
         actingAs(outsiderId);
 
@@ -245,10 +245,10 @@ class MeetingServiceTest {
     void updateMeeting_success() {
         Long projectId = createProjectAsOwner();
         actingAs(ownerId);
-        MeetingDetailResponse created = meetingService.createMeeting(projectId, baseRequest(null, null));
+        MeetingDetailResDto created = meetingService.createMeeting(projectId, baseRequest(null, null));
 
-        MeetingDetailResponse updated = meetingService.updateMeeting(created.id(),
-                new MeetingUpdateRequest("Updated title", null, null, null));
+        MeetingDetailResDto updated = meetingService.updateMeeting(created.id(),
+                new MeetingUpdateReqDto("Updated title", null, null, null));
 
         assertThat(updated.title()).isEqualTo("Updated title");
     }
@@ -256,14 +256,14 @@ class MeetingServiceTest {
     @Test
     void updateMeeting_replacesParticipants() {
         Long projectId = createProjectAsOwner();
-        projectMemberService.addMember(projectId, new ProjectMemberCreateRequest(memberEmail));
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
 
         actingAs(ownerId);
-        MeetingDetailResponse created = meetingService.createMeeting(projectId, baseRequest(List.of(memberId), null));
+        MeetingDetailResDto created = meetingService.createMeeting(projectId, baseRequest(List.of(memberId), null));
         assertThat(created.participants()).hasSize(1);
 
-        MeetingDetailResponse updated = meetingService.updateMeeting(created.id(),
-                new MeetingUpdateRequest(null, null, null, List.of(ownerId)));
+        MeetingDetailResDto updated = meetingService.updateMeeting(created.id(),
+                new MeetingUpdateReqDto(null, null, null, List.of(ownerId)));
 
         assertThat(updated.participants()).hasSize(1);
         assertThat(updated.participants().get(0).userId()).isEqualTo(ownerId);
@@ -273,7 +273,7 @@ class MeetingServiceTest {
     void deleteMeeting_success() {
         Long projectId = createProjectAsOwner();
         actingAs(ownerId);
-        MeetingDetailResponse created = meetingService.createMeeting(projectId, baseRequest(null, null));
+        MeetingDetailResDto created = meetingService.createMeeting(projectId, baseRequest(null, null));
 
         meetingService.deleteMeeting(created.id());
 
@@ -286,7 +286,7 @@ class MeetingServiceTest {
         ActionItem todo = createActionItem(projectId, ActionItemStatus.TODO);
 
         actingAs(ownerId);
-        MeetingDetailResponse created = meetingService.createMeeting(
+        MeetingDetailResDto created = meetingService.createMeeting(
                 projectId, baseRequest(null, List.of(todo.getId())));
         assertThat(meetingActionLinkRepository.findAllByMeetingId(created.id())).hasSize(1);
 

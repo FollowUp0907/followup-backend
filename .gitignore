@@ -39,3 +39,12 @@ out/
 ### Environment secrets ###
 .env
 .env.local
+
+### Application config (환경설정 파일은 Git에 올리지 않음) ###
+src/main/resources/application.yml
+src/main/resources/application-local.yml
+src/main/resources/application-dev.yml
+src/main/resources/application-prod.yml
+
+### Flyway migration files must stay tracked (do not ignore) ###
+!src/main/resources/db/migration/**

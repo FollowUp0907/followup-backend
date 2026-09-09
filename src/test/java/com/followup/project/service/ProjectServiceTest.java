@@ -7,9 +7,9 @@ import static org.mockito.Mockito.when;
 import com.followup.global.exception.BusinessException;
 import com.followup.global.exception.ErrorCode;
 import com.followup.global.security.CurrentUserProvider;
-import com.followup.project.dto.ProjectCreateRequest;
-import com.followup.project.dto.ProjectResponse;
-import com.followup.project.dto.ProjectUpdateRequest;
+import com.followup.project.dto.ProjectCreateReqDto;
+import com.followup.project.dto.ProjectResDto;
+import com.followup.project.dto.ProjectUpdateReqDto;
 import com.followup.project.entity.ProjectMember;
 import com.followup.project.entity.ProjectRole;
 import com.followup.project.repository.ProjectMemberRepository;
@@ -78,7 +78,7 @@ class ProjectServiceTest {
     void createProject_success() {
         actingAs(ownerId);
 
-        ProjectResponse response = projectService.createProject(new ProjectCreateRequest("Project A", "desc"));
+        ProjectResDto response = projectService.createProject(new ProjectCreateReqDto("Project A", "desc"));
 
         assertThat(response.name()).isEqualTo("Project A");
         assertThat(response.createdBy()).isEqualTo(ownerId);
@@ -88,7 +88,7 @@ class ProjectServiceTest {
     void createProject_registersOwnerMember() {
         actingAs(ownerId);
 
-        ProjectResponse response = projectService.createProject(new ProjectCreateRequest("Project A", null));
+        ProjectResDto response = projectService.createProject(new ProjectCreateReqDto("Project A", null));
 
         assertThat(projectMemberRepository.existsByProjectIdAndUserId(response.id(), ownerId)).isTrue();
         ProjectMember member = projectMemberRepository.findByProjectIdAndUserId(response.id(), ownerId).orElseThrow();
@@ -98,10 +98,10 @@ class ProjectServiceTest {
     @Test
     void getProjects_returnsOnlyMyProjects() {
         actingAs(ownerId);
-        projectService.createProject(new ProjectCreateRequest("Owner Project", null));
+        projectService.createProject(new ProjectCreateReqDto("Owner Project", null));
 
         actingAs(memberId);
-        List<ProjectResponse> myProjects = projectService.getProjects();
+        List<ProjectResDto> myProjects = projectService.getProjects();
 
         assertThat(myProjects).isEmpty();
     }
@@ -109,9 +109,9 @@ class ProjectServiceTest {
     @Test
     void getProject_success() {
         actingAs(ownerId);
-        ProjectResponse created = projectService.createProject(new ProjectCreateRequest("P", null));
+        ProjectResDto created = projectService.createProject(new ProjectCreateReqDto("P", null));
 
-        ProjectResponse fetched = projectService.getProject(created.id());
+        ProjectResDto fetched = projectService.getProject(created.id());
 
         assertThat(fetched.id()).isEqualTo(created.id());
     }
@@ -119,7 +119,7 @@ class ProjectServiceTest {
     @Test
     void getProject_nonMemberDenied() {
         actingAs(ownerId);
-        ProjectResponse created = projectService.createProject(new ProjectCreateRequest("P", null));
+        ProjectResDto created = projectService.createProject(new ProjectCreateReqDto("P", null));
 
         actingAs(memberId);
 
@@ -142,9 +142,9 @@ class ProjectServiceTest {
     @Test
     void updateProject_ownerSuccess() {
         actingAs(ownerId);
-        ProjectResponse created = projectService.createProject(new ProjectCreateRequest("P", null));
+        ProjectResDto created = projectService.createProject(new ProjectCreateReqDto("P", null));
 
-        ProjectResponse updated = projectService.updateProject(created.id(), new ProjectUpdateRequest("New name", null));
+        ProjectResDto updated = projectService.updateProject(created.id(), new ProjectUpdateReqDto("New name", null));
 
         assertThat(updated.name()).isEqualTo("New name");
     }
@@ -152,12 +152,12 @@ class ProjectServiceTest {
     @Test
     void updateProject_memberDenied() {
         actingAs(ownerId);
-        ProjectResponse created = projectService.createProject(new ProjectCreateRequest("P", null));
+        ProjectResDto created = projectService.createProject(new ProjectCreateReqDto("P", null));
         addMember(created.id(), memberId, ProjectRole.MEMBER);
 
         actingAs(memberId);
 
-        assertThatThrownBy(() -> projectService.updateProject(created.id(), new ProjectUpdateRequest("x", null)))
+        assertThatThrownBy(() -> projectService.updateProject(created.id(), new ProjectUpdateReqDto("x", null)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PROJECT_OWNER_REQUIRED);
@@ -166,7 +166,7 @@ class ProjectServiceTest {
     @Test
     void deleteProject_ownerSuccess() {
         actingAs(ownerId);
-        ProjectResponse created = projectService.createProject(new ProjectCreateRequest("P", null));
+        ProjectResDto created = projectService.createProject(new ProjectCreateReqDto("P", null));
 
         projectService.deleteProject(created.id());
 
@@ -176,7 +176,7 @@ class ProjectServiceTest {
     @Test
     void deleteProject_memberDenied() {
         actingAs(ownerId);
-        ProjectResponse created = projectService.createProject(new ProjectCreateRequest("P", null));
+        ProjectResDto created = projectService.createProject(new ProjectCreateReqDto("P", null));
         addMember(created.id(), memberId, ProjectRole.MEMBER);
 
         actingAs(memberId);

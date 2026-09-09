@@ -7,7 +7,7 @@ import com.followup.meeting.entity.MeetingStatus;
 import java.time.LocalDateTime;
 import java.util.List;
 
-public record MeetingDetailResponse(
+public record MeetingDetailResDto(
         Long id,
         Long projectId,
         String title,
@@ -17,14 +17,14 @@ public record MeetingDetailResponse(
         Long createdBy,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
-        List<MeetingParticipantResponse> participants,
-        List<CarryOverActionItemResponse> carryOverActionItems
+        List<MeetingParticipantResDto> participants,
+        List<CarryOverActionItemResDto> carryOverActionItems
 ) {
 
-    public static MeetingDetailResponse from(Meeting meeting,
+    public static MeetingDetailResDto from(Meeting meeting,
                                               List<MeetingParticipant> participants,
                                               List<ActionItem> carryOverActionItems) {
-        return new MeetingDetailResponse(
+        return new MeetingDetailResDto(
                 meeting.getId(),
                 meeting.getProject().getId(),
                 meeting.getTitle(),
@@ -34,8 +34,8 @@ public record MeetingDetailResponse(
                 meeting.getCreatedBy().getId(),
                 meeting.getCreatedAt(),
                 meeting.getUpdatedAt(),
-                participants.stream().map(MeetingParticipantResponse::from).toList(),
-                carryOverActionItems.stream().map(CarryOverActionItemResponse::from).toList()
+                participants.stream().map(MeetingParticipantResDto::from).toList(),
+                carryOverActionItems.stream().map(CarryOverActionItemResDto::from).toList()
         );
     }
 }

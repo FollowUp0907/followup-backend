@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
 import java.util.List;
 
-public record MeetingCreateRequest(
+public record MeetingCreateReqDto(
 
         @NotBlank
         @Size(max = 200)

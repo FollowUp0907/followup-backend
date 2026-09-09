@@ -5,9 +5,9 @@ import com.followup.global.exception.BusinessException;
 import com.followup.global.exception.ErrorCode;
 import com.followup.global.security.CurrentUserProvider;
 import com.followup.meeting.repository.MeetingRepository;
-import com.followup.project.dto.ProjectCreateRequest;
-import com.followup.project.dto.ProjectResponse;
-import com.followup.project.dto.ProjectUpdateRequest;
+import com.followup.project.dto.ProjectCreateReqDto;
+import com.followup.project.dto.ProjectResDto;
+import com.followup.project.dto.ProjectUpdateReqDto;
 import com.followup.project.entity.Project;
 import com.followup.project.entity.ProjectMember;
 import com.followup.project.entity.ProjectRole;
@@ -32,7 +32,7 @@ public class ProjectService {
     private final CurrentUserProvider currentUserProvider;
 
     @Transactional
-    public ProjectResponse createProject(ProjectCreateRequest request) {
+    public ProjectResDto createProject(ProjectCreateReqDto request) {
         Long currentUserId = currentUserProvider.getCurrentUserId();
         User creator = userRepository.findById(currentUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
@@ -53,27 +53,27 @@ public class ProjectService {
             projectMemberRepository.save(owner);
         }
 
-        return ProjectResponse.from(project);
+        return ProjectResDto.from(project);
     }
 
     @Transactional(readOnly = true)
-    public List<ProjectResponse> getProjects() {
+    public List<ProjectResDto> getProjects() {
         Long currentUserId = currentUserProvider.getCurrentUserId();
         return projectMemberRepository.findAllByUserId(currentUserId).stream()
                 .map(ProjectMember::getProject)
-                .map(ProjectResponse::from)
+                .map(ProjectResDto::from)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public ProjectResponse getProject(Long projectId) {
+    public ProjectResDto getProject(Long projectId) {
         Project project = getProjectOrThrow(projectId);
         requireMember(projectId, currentUserProvider.getCurrentUserId());
-        return ProjectResponse.from(project);
+        return ProjectResDto.from(project);
     }
 
     @Transactional
-    public ProjectResponse updateProject(Long projectId, ProjectUpdateRequest request) {
+    public ProjectResDto updateProject(Long projectId, ProjectUpdateReqDto request) {
         Project project = getProjectOrThrow(projectId);
         requireOwner(projectId, currentUserProvider.getCurrentUserId());
 
@@ -82,7 +82,7 @@ public class ProjectService {
         }
 
         project.update(request.name(), request.description());
-        return ProjectResponse.from(project);
+        return ProjectResDto.from(project);
     }
 
     @Transactional

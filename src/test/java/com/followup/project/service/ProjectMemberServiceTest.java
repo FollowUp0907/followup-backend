@@ -11,9 +11,9 @@ import com.followup.actionitem.repository.ActionItemRepository;
 import com.followup.global.exception.BusinessException;
 import com.followup.global.exception.ErrorCode;
 import com.followup.global.security.CurrentUserProvider;
-import com.followup.project.dto.ProjectMemberCreateRequest;
-import com.followup.project.dto.ProjectMemberResponse;
-import com.followup.project.dto.ProjectResponse;
+import com.followup.project.dto.ProjectMemberCreateReqDto;
+import com.followup.project.dto.ProjectMemberResDto;
+import com.followup.project.dto.ProjectResDto;
 import com.followup.project.entity.ProjectRole;
 import com.followup.project.repository.ProjectMemberRepository;
 import com.followup.project.repository.ProjectRepository;
@@ -85,8 +85,8 @@ class ProjectMemberServiceTest {
 
     private Long createProjectAsOwner() {
         actingAs(ownerId);
-        ProjectResponse project = projectService.createProject(
-                new com.followup.project.dto.ProjectCreateRequest("Project", null));
+        ProjectResDto project = projectService.createProject(
+                new com.followup.project.dto.ProjectCreateReqDto("Project", null));
         return project.id();
     }
 
@@ -94,7 +94,7 @@ class ProjectMemberServiceTest {
     void getMembers_success() {
         Long projectId = createProjectAsOwner();
 
-        List<ProjectMemberResponse> members = projectMemberService.getMembers(projectId);
+        List<ProjectMemberResDto> members = projectMemberService.getMembers(projectId);
 
         assertThat(members).hasSize(1);
         assertThat(members.get(0).role()).isEqualTo(ProjectRole.OWNER);
@@ -116,8 +116,8 @@ class ProjectMemberServiceTest {
     void addMember_ownerSuccess() {
         Long projectId = createProjectAsOwner();
 
-        ProjectMemberResponse response = projectMemberService.addMember(
-                projectId, new ProjectMemberCreateRequest(memberEmail));
+        ProjectMemberResDto response = projectMemberService.addMember(
+                projectId, new ProjectMemberCreateReqDto(memberEmail));
 
         assertThat(response.role()).isEqualTo(ProjectRole.MEMBER);
         assertThat(projectMemberRepository.existsByProjectIdAndUserId(projectId, memberId)).isTrue();
@@ -126,12 +126,12 @@ class ProjectMemberServiceTest {
     @Test
     void addMember_memberForbidden() {
         Long projectId = createProjectAsOwner();
-        projectMemberService.addMember(projectId, new ProjectMemberCreateRequest(memberEmail));
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
 
         actingAs(memberId);
 
         assertThatThrownBy(() -> projectMemberService.addMember(
-                projectId, new ProjectMemberCreateRequest("outsider-" + UUID.randomUUID() + "@test.com")))
+                projectId, new ProjectMemberCreateReqDto("outsider-" + UUID.randomUUID() + "@test.com")))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PROJECT_OWNER_REQUIRED);
@@ -142,7 +142,7 @@ class ProjectMemberServiceTest {
         Long projectId = createProjectAsOwner();
 
         assertThatThrownBy(() -> projectMemberService.addMember(
-                projectId, new ProjectMemberCreateRequest("no-such-user@test.com")))
+                projectId, new ProjectMemberCreateReqDto("no-such-user@test.com")))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
@@ -151,10 +151,10 @@ class ProjectMemberServiceTest {
     @Test
     void addMember_alreadyExists() {
         Long projectId = createProjectAsOwner();
-        projectMemberService.addMember(projectId, new ProjectMemberCreateRequest(memberEmail));
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
 
         assertThatThrownBy(() -> projectMemberService.addMember(
-                projectId, new ProjectMemberCreateRequest(memberEmail)))
+                projectId, new ProjectMemberCreateReqDto(memberEmail)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PROJECT_MEMBER_ALREADY_EXISTS);
@@ -163,7 +163,7 @@ class ProjectMemberServiceTest {
     @Test
     void removeMember_ownerSuccess() {
         Long projectId = createProjectAsOwner();
-        projectMemberService.addMember(projectId, new ProjectMemberCreateRequest(memberEmail));
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
 
         projectMemberService.removeMember(projectId, memberId);
 
@@ -173,7 +173,7 @@ class ProjectMemberServiceTest {
     @Test
     void removeMember_memberForbidden() {
         Long projectId = createProjectAsOwner();
-        projectMemberService.addMember(projectId, new ProjectMemberCreateRequest(memberEmail));
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
 
         actingAs(memberId);
 
@@ -206,7 +206,7 @@ class ProjectMemberServiceTest {
     @Test
     void removeMember_unassignsActionItems() {
         Long projectId = createProjectAsOwner();
-        projectMemberService.addMember(projectId, new ProjectMemberCreateRequest(memberEmail));
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
 
         ActionItem actionItem = actionItemRepository.save(ActionItem.builder()
                 .project(projectRepository.getReferenceById(projectId))
