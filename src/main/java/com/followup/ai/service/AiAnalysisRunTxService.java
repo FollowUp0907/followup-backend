@@ -27,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
-public class AiAnalysisRunTransactionService {
+public class AiAnalysisRunTxService {
 
     // 재사용 가능한 상태 목록. FAILED는 제외해 항상 재시도되도록 한다.
     private static final List<AnalysisStatus> REUSABLE_STATUSES =

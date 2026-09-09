@@ -31,7 +31,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * 외부 Gemini 호출이 열린 DB 트랜잭션 안에서 실행되지 않도록, DB 작업은
- * {@link AiAnalysisRunTransactionService}의 짧은 트랜잭션으로 분리해 처리한다.
+ * {@link AiAnalysisRunTxService}의 짧은 트랜잭션으로 분리해 처리한다.
  * 재사용 가능한 이전 분석이 있으면 Gemini를 다시 호출하지 않는다.
  */
 @Service
@@ -44,7 +44,7 @@ public class AiAnalysisService {
     private final ProjectMemberRepository projectMemberRepository;
     private final UserRepository userRepository;
     private final AiAnalysisClient aiAnalysisClient;
-    private final AiAnalysisRunTransactionService aiAnalysisRunTransactionService;
+    private final AiAnalysisRunTxService aiAnalysisRunTransactionService;
     private final CurrentUserProvider currentUserProvider;
     private final ObjectMapper objectMapper;
 
@@ -53,7 +53,7 @@ public class AiAnalysisService {
         String modelName = aiAnalysisClient.getModelName();
         String promptVersion = aiAnalysisClient.getPromptVersion();
 
-        AiAnalysisRunTransactionService.AnalysisStart start =
+        AiAnalysisRunTxService.AnalysisStart start =
                 aiAnalysisRunTransactionService.startAnalysis(meetingId, currentUserId, modelName, promptVersion);
 
         if (!start.reused()) {

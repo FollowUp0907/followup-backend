@@ -28,13 +28,13 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Directly exercises AiAnalysisRunTransactionService's short PROCESSING -> GENERATED/FAILED
+ * Directly exercises AiAnalysisRunTxService's short PROCESSING -> GENERATED/FAILED
  * transactions and duplicate-request reuse logic, independent of the external AI call which
  * lives in AiAnalysisService.
  */
 @SpringBootTest
 @Transactional
-class AiAnalysisRunTransactionServiceTest {
+class AiAnalysisRunTxServiceTest {
 
     private static final String MODEL = "model-x";
     private static final String PROMPT_VERSION = "prompt-v9";
@@ -46,7 +46,7 @@ class AiAnalysisRunTransactionServiceTest {
     private MeetingService meetingService;
 
     @Autowired
-    private AiAnalysisRunTransactionService aiAnalysisRunTransactionService;
+    private AiAnalysisRunTxService aiAnalysisRunTransactionService;
 
     @Autowired
     private AiAnalysisRunRepository aiAnalysisRunRepository;
@@ -86,7 +86,7 @@ class AiAnalysisRunTransactionServiceTest {
         return meeting.id();
     }
 
-    private AiAnalysisRunTransactionService.AnalysisStart start(Long meetingId) {
+    private AiAnalysisRunTxService.AnalysisStart start(Long meetingId) {
         return aiAnalysisRunTransactionService.startAnalysis(meetingId, ownerId, MODEL, PROMPT_VERSION);
     }
 
@@ -95,7 +95,7 @@ class AiAnalysisRunTransactionServiceTest {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Meeting notes about the roadmap.");
 
-        AiAnalysisRunTransactionService.AnalysisStart result = start(meetingId);
+        AiAnalysisRunTxService.AnalysisStart result = start(meetingId);
 
         assertThat(result.reused()).isFalse();
         assertThat(result.meetingContent()).isEqualTo("Meeting notes about the roadmap.");
@@ -130,7 +130,7 @@ class AiAnalysisRunTransactionServiceTest {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
 
-        AiAnalysisRunTransactionService.AnalysisStart result = start(meetingId);
+        AiAnalysisRunTxService.AnalysisStart result = start(meetingId);
 
         // Simulates the window between the short "start" transaction committing and the external
         // AI call resolving: the PROCESSING record must already be durably saved on its own.
@@ -144,7 +144,7 @@ class AiAnalysisRunTransactionServiceTest {
     void completeWithSuccess_transitionsProcessingToGenerated() {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
-        AiAnalysisRunTransactionService.AnalysisStart result = start(meetingId);
+        AiAnalysisRunTxService.AnalysisStart result = start(meetingId);
 
         aiAnalysisRunTransactionService.completeWithSuccess(
                 result.analysisId(), "{\"decisions\":[],\"actionItems\":[]}");
@@ -160,7 +160,7 @@ class AiAnalysisRunTransactionServiceTest {
     void completeWithFailure_transitionsProcessingToFailedWithErrorMessage() {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
-        AiAnalysisRunTransactionService.AnalysisStart result = start(meetingId);
+        AiAnalysisRunTxService.AnalysisStart result = start(meetingId);
 
         aiAnalysisRunTransactionService.completeWithFailure(result.analysisId(), "Gemini API request failed");
 
@@ -176,7 +176,7 @@ class AiAnalysisRunTransactionServiceTest {
         String content = "This is the raw meeting content that must never be stored verbatim.";
         Long meetingId = createMeetingWithContent(projectId, content);
 
-        AiAnalysisRunTransactionService.AnalysisStart result = start(meetingId);
+        AiAnalysisRunTxService.AnalysisStart result = start(meetingId);
 
         AiAnalysisRun run = aiAnalysisRunRepository.findById(result.analysisId()).orElseThrow();
         assertThat(run.getInputHash())
@@ -190,10 +190,10 @@ class AiAnalysisRunTransactionServiceTest {
     void startAnalysis_reusesGeneratedRunForIdenticalInput() {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
-        AiAnalysisRunTransactionService.AnalysisStart first = start(meetingId);
+        AiAnalysisRunTxService.AnalysisStart first = start(meetingId);
         aiAnalysisRunTransactionService.completeWithSuccess(first.analysisId(), "{}");
 
-        AiAnalysisRunTransactionService.AnalysisStart second = start(meetingId);
+        AiAnalysisRunTxService.AnalysisStart second = start(meetingId);
 
         assertThat(second.reused()).isTrue();
         assertThat(second.analysisId()).isEqualTo(first.analysisId());
@@ -204,9 +204,9 @@ class AiAnalysisRunTransactionServiceTest {
     void startAnalysis_reusesProcessingRunWithoutCreatingAnotherRow() {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
-        AiAnalysisRunTransactionService.AnalysisStart first = start(meetingId);
+        AiAnalysisRunTxService.AnalysisStart first = start(meetingId);
 
-        AiAnalysisRunTransactionService.AnalysisStart second = start(meetingId);
+        AiAnalysisRunTxService.AnalysisStart second = start(meetingId);
 
         assertThat(second.reused()).isTrue();
         assertThat(second.analysisId()).isEqualTo(first.analysisId());
@@ -217,10 +217,10 @@ class AiAnalysisRunTransactionServiceTest {
     void startAnalysis_doesNotReuseFailedRun() {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
-        AiAnalysisRunTransactionService.AnalysisStart first = start(meetingId);
+        AiAnalysisRunTxService.AnalysisStart first = start(meetingId);
         aiAnalysisRunTransactionService.completeWithFailure(first.analysisId(), "boom");
 
-        AiAnalysisRunTransactionService.AnalysisStart second = start(meetingId);
+        AiAnalysisRunTxService.AnalysisStart second = start(meetingId);
 
         assertThat(second.reused()).isFalse();
         assertThat(second.analysisId()).isNotEqualTo(first.analysisId());
@@ -231,10 +231,10 @@ class AiAnalysisRunTransactionServiceTest {
     void startAnalysis_newRunWhenModelDiffersFromReusableCandidate() {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
-        AiAnalysisRunTransactionService.AnalysisStart first = start(meetingId);
+        AiAnalysisRunTxService.AnalysisStart first = start(meetingId);
         aiAnalysisRunTransactionService.completeWithSuccess(first.analysisId(), "{}");
 
-        AiAnalysisRunTransactionService.AnalysisStart second =
+        AiAnalysisRunTxService.AnalysisStart second =
                 aiAnalysisRunTransactionService.startAnalysis(meetingId, ownerId, "different-model", PROMPT_VERSION);
 
         assertThat(second.reused()).isFalse();
