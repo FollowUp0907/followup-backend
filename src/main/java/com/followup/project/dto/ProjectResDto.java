@@ -3,7 +3,7 @@ package com.followup.project.dto;
 import com.followup.project.entity.Project;
 import java.time.LocalDateTime;
 
-public record ProjectResponse(
+public record ProjectResDto(
         Long id,
         String name,
         String description,
@@ -12,8 +12,8 @@ public record ProjectResponse(
         LocalDateTime updatedAt
 ) {
 
-    public static ProjectResponse from(Project project) {
-        return new ProjectResponse(
+    public static ProjectResDto from(Project project) {
+        return new ProjectResDto(
                 project.getId(),
                 project.getName(),
                 project.getDescription(),

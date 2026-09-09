@@ -4,8 +4,8 @@ import com.followup.actionitem.repository.ActionItemRepository;
 import com.followup.global.exception.BusinessException;
 import com.followup.global.exception.ErrorCode;
 import com.followup.global.security.CurrentUserProvider;
-import com.followup.project.dto.ProjectMemberCreateRequest;
-import com.followup.project.dto.ProjectMemberResponse;
+import com.followup.project.dto.ProjectMemberCreateReqDto;
+import com.followup.project.dto.ProjectMemberResDto;
 import com.followup.project.entity.Project;
 import com.followup.project.entity.ProjectMember;
 import com.followup.project.entity.ProjectRole;
@@ -29,18 +29,18 @@ public class ProjectMemberService {
     private final CurrentUserProvider currentUserProvider;
 
     @Transactional(readOnly = true)
-    public List<ProjectMemberResponse> getMembers(Long projectId) {
+    public List<ProjectMemberResDto> getMembers(Long projectId) {
         getProjectOrThrow(projectId);
         requireMember(projectId, currentUserProvider.getCurrentUserId());
 
         return projectMemberRepository.findAllByProjectId(projectId).stream()
-                .map(ProjectMemberResponse::from)
+                .map(ProjectMemberResDto::from)
                 .toList();
     }
 
     /** OWNER만 가능하며, 이미 가입된 사용자를 email로 찾아 추가한다. 미가입 email은 404로 처리한다. */
     @Transactional
-    public ProjectMemberResponse addMember(Long projectId, ProjectMemberCreateRequest request) {
+    public ProjectMemberResDto addMember(Long projectId, ProjectMemberCreateReqDto request) {
         Project project = getProjectOrThrow(projectId);
         requireOwner(projectId, currentUserProvider.getCurrentUserId());
 
@@ -58,7 +58,7 @@ public class ProjectMemberService {
                 .build();
         projectMemberRepository.save(member);
 
-        return ProjectMemberResponse.from(member);
+        return ProjectMemberResDto.from(member);
     }
 
     /**

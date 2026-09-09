@@ -1,9 +1,9 @@
 package com.followup.meeting.controller;
 
-import com.followup.meeting.dto.MeetingCreateRequest;
-import com.followup.meeting.dto.MeetingDetailResponse;
-import com.followup.meeting.dto.MeetingListResponse;
-import com.followup.meeting.dto.MeetingUpdateRequest;
+import com.followup.meeting.dto.MeetingCreateReqDto;
+import com.followup.meeting.dto.MeetingDetailResDto;
+import com.followup.meeting.dto.MeetingListResDto;
+import com.followup.meeting.dto.MeetingUpdateReqDto;
 import com.followup.meeting.service.MeetingService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -27,24 +27,24 @@ public class MeetingController {
     private final MeetingService meetingService;
 
     @GetMapping("/project/{projectId}/meetings")
-    public ResponseEntity<List<MeetingListResponse>> getMeetings(@PathVariable Long projectId) {
+    public ResponseEntity<List<MeetingListResDto>> getMeetings(@PathVariable Long projectId) {
         return ResponseEntity.ok(meetingService.getMeetings(projectId));
     }
 
     @PostMapping("/project/{projectId}/meeting")
-    public ResponseEntity<MeetingDetailResponse> createMeeting(@PathVariable Long projectId,
-                                                                @Valid @RequestBody MeetingCreateRequest request) {
+    public ResponseEntity<MeetingDetailResDto> createMeeting(@PathVariable Long projectId,
+                                                                @Valid @RequestBody MeetingCreateReqDto request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(meetingService.createMeeting(projectId, request));
     }
 
     @GetMapping("/meeting/{meetingId}")
-    public ResponseEntity<MeetingDetailResponse> getMeeting(@PathVariable Long meetingId) {
+    public ResponseEntity<MeetingDetailResDto> getMeeting(@PathVariable Long meetingId) {
         return ResponseEntity.ok(meetingService.getMeeting(meetingId));
     }
 
     @PatchMapping("/meeting/{meetingId}")
-    public ResponseEntity<MeetingDetailResponse> updateMeeting(@PathVariable Long meetingId,
-                                                                @Valid @RequestBody MeetingUpdateRequest request) {
+    public ResponseEntity<MeetingDetailResDto> updateMeeting(@PathVariable Long meetingId,
+                                                                @Valid @RequestBody MeetingUpdateReqDto request) {
         return ResponseEntity.ok(meetingService.updateMeeting(meetingId, request));
     }
 

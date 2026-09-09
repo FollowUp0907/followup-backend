@@ -10,11 +10,11 @@ import com.followup.ai.repository.AiAnalysisRunRepository;
 import com.followup.global.exception.BusinessException;
 import com.followup.global.exception.ErrorCode;
 import com.followup.global.security.CurrentUserProvider;
-import com.followup.meeting.dto.MeetingCreateRequest;
-import com.followup.meeting.dto.MeetingDetailResponse;
+import com.followup.meeting.dto.MeetingCreateReqDto;
+import com.followup.meeting.dto.MeetingDetailResDto;
 import com.followup.meeting.service.MeetingService;
-import com.followup.project.dto.ProjectCreateRequest;
-import com.followup.project.dto.ProjectResponse;
+import com.followup.project.dto.ProjectCreateReqDto;
+import com.followup.project.dto.ProjectResDto;
 import com.followup.project.service.ProjectService;
 import com.followup.user.entity.User;
 import com.followup.user.repository.UserRepository;
@@ -75,14 +75,14 @@ class AiAnalysisRunTransactionServiceTest {
 
     private Long createProjectAsOwner() {
         actingAs(ownerId);
-        ProjectResponse project = projectService.createProject(new ProjectCreateRequest("Project", null));
+        ProjectResDto project = projectService.createProject(new ProjectCreateReqDto("Project", null));
         return project.id();
     }
 
     private Long createMeetingWithContent(Long projectId, String content) {
         actingAs(ownerId);
-        MeetingDetailResponse meeting = meetingService.createMeeting(projectId,
-                new MeetingCreateRequest("Sync", LocalDateTime.of(2026, 9, 7, 10, 0), content, null, null));
+        MeetingDetailResDto meeting = meetingService.createMeeting(projectId,
+                new MeetingCreateReqDto("Sync", LocalDateTime.of(2026, 9, 7, 10, 0), content, null, null));
         return meeting.id();
     }
 

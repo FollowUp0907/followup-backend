@@ -4,10 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
-import com.followup.actionitem.dto.ActionItemCreateRequest;
-import com.followup.actionitem.dto.ActionItemDetailResponse;
-import com.followup.actionitem.dto.ActionItemListResponse;
-import com.followup.actionitem.dto.ActionItemUpdateRequest;
+import com.followup.actionitem.dto.ActionItemCreateReqDto;
+import com.followup.actionitem.dto.ActionItemDetailResDto;
+import com.followup.actionitem.dto.ActionItemListResDto;
+import com.followup.actionitem.dto.ActionItemUpdateReqDto;
 import com.followup.actionitem.entity.ActionItemStatus;
 import com.followup.actionitem.entity.Priority;
 import com.followup.actionitem.repository.ActionItemRepository;
@@ -15,13 +15,13 @@ import com.followup.actionitem.repository.MeetingActionLinkRepository;
 import com.followup.global.exception.BusinessException;
 import com.followup.global.exception.ErrorCode;
 import com.followup.global.security.CurrentUserProvider;
-import com.followup.meeting.dto.MeetingCreateRequest;
-import com.followup.meeting.dto.MeetingDetailResponse;
+import com.followup.meeting.dto.MeetingCreateReqDto;
+import com.followup.meeting.dto.MeetingDetailResDto;
 import com.followup.meeting.repository.MeetingRepository;
 import com.followup.meeting.service.MeetingService;
-import com.followup.project.dto.ProjectCreateRequest;
-import com.followup.project.dto.ProjectMemberCreateRequest;
-import com.followup.project.dto.ProjectResponse;
+import com.followup.project.dto.ProjectCreateReqDto;
+import com.followup.project.dto.ProjectMemberCreateReqDto;
+import com.followup.project.dto.ProjectResDto;
 import com.followup.project.service.ProjectMemberService;
 import com.followup.project.service.ProjectService;
 import com.followup.user.entity.User;
@@ -91,20 +91,20 @@ class ActionItemServiceTest {
 
     private Long createProjectAsOwner() {
         actingAs(ownerId);
-        ProjectResponse project = projectService.createProject(new ProjectCreateRequest("Project", null));
+        ProjectResDto project = projectService.createProject(new ProjectCreateReqDto("Project", null));
         return project.id();
     }
 
-    private ActionItemDetailResponse create(Long projectId, String title, Long assigneeUserId, Priority priority) {
+    private ActionItemDetailResDto create(Long projectId, String title, Long assigneeUserId, Priority priority) {
         return actionItemService.createActionItem(projectId,
-                new ActionItemCreateRequest(title, null, assigneeUserId, null, priority));
+                new ActionItemCreateReqDto(title, null, assigneeUserId, null, priority));
     }
 
     @Test
     void createActionItem_successWithDefaultTodoStatus() {
         Long projectId = createProjectAsOwner();
 
-        ActionItemDetailResponse response = create(projectId, "Write docs", null, Priority.HIGH);
+        ActionItemDetailResDto response = create(projectId, "Write docs", null, Priority.HIGH);
 
         assertThat(response.status()).isEqualTo(ActionItemStatus.TODO);
         assertThat(response.priority()).isEqualTo(Priority.HIGH);
@@ -115,7 +115,7 @@ class ActionItemServiceTest {
     void createActionItem_defaultPriorityIsMedium() {
         Long projectId = createProjectAsOwner();
 
-        ActionItemDetailResponse response = create(projectId, "Write docs", null, null);
+        ActionItemDetailResDto response = create(projectId, "Write docs", null, null);
 
         assertThat(response.priority()).isEqualTo(Priority.MEDIUM);
     }
@@ -136,7 +136,7 @@ class ActionItemServiceTest {
         create(projectId, "A", null, null);
         create(projectId, "B", null, null);
 
-        List<ActionItemListResponse> result = actionItemService.getActionItems(projectId, null, null, null);
+        List<ActionItemListResDto> result = actionItemService.getActionItems(projectId, null, null, null);
 
         assertThat(result).hasSize(2);
     }
@@ -144,12 +144,12 @@ class ActionItemServiceTest {
     @Test
     void getActionItems_filterByStatusTodo() {
         Long projectId = createProjectAsOwner();
-        ActionItemDetailResponse todo = create(projectId, "Todo item", null, null);
-        ActionItemDetailResponse other = create(projectId, "Done item", null, null);
-        actionItemService.updateActionItem(other.id(), new ActionItemUpdateRequest(
+        ActionItemDetailResDto todo = create(projectId, "Todo item", null, null);
+        ActionItemDetailResDto other = create(projectId, "Done item", null, null);
+        actionItemService.updateActionItem(other.id(), new ActionItemUpdateReqDto(
                 null, null, null, null, ActionItemStatus.DONE, null));
 
-        List<ActionItemListResponse> result = actionItemService.getActionItems(projectId, "TODO", null, null);
+        List<ActionItemListResDto> result = actionItemService.getActionItems(projectId, "TODO", null, null);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).id()).isEqualTo(todo.id());
@@ -158,11 +158,11 @@ class ActionItemServiceTest {
     @Test
     void getActionItems_filterByStatusInProgress() {
         Long projectId = createProjectAsOwner();
-        ActionItemDetailResponse item = create(projectId, "Task", null, null);
-        actionItemService.updateActionItem(item.id(), new ActionItemUpdateRequest(
+        ActionItemDetailResDto item = create(projectId, "Task", null, null);
+        actionItemService.updateActionItem(item.id(), new ActionItemUpdateReqDto(
                 null, null, null, null, ActionItemStatus.IN_PROGRESS, null));
 
-        List<ActionItemListResponse> result = actionItemService.getActionItems(projectId, "IN_PROGRESS", null, null);
+        List<ActionItemListResDto> result = actionItemService.getActionItems(projectId, "IN_PROGRESS", null, null);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).status()).isEqualTo(ActionItemStatus.IN_PROGRESS);
@@ -174,7 +174,7 @@ class ActionItemServiceTest {
         create(projectId, "High", null, Priority.HIGH);
         create(projectId, "Low", null, Priority.LOW);
 
-        List<ActionItemListResponse> result = actionItemService.getActionItems(projectId, null, null, Priority.HIGH);
+        List<ActionItemListResDto> result = actionItemService.getActionItems(projectId, null, null, Priority.HIGH);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).priority()).isEqualTo(Priority.HIGH);
@@ -183,11 +183,11 @@ class ActionItemServiceTest {
     @Test
     void getActionItems_filterByAssignee() {
         Long projectId = createProjectAsOwner();
-        projectMemberService.addMember(projectId, new ProjectMemberCreateRequest(memberEmail));
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
         create(projectId, "Assigned", memberId, null);
         create(projectId, "Unassigned", null, null);
 
-        List<ActionItemListResponse> result = actionItemService.getActionItems(projectId, null, memberId, null);
+        List<ActionItemListResDto> result = actionItemService.getActionItems(projectId, null, memberId, null);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).assigneeUserId()).isEqualTo(memberId);
@@ -196,13 +196,13 @@ class ActionItemServiceTest {
     @Test
     void getActionItems_combinedFilters() {
         Long projectId = createProjectAsOwner();
-        projectMemberService.addMember(projectId, new ProjectMemberCreateRequest(memberEmail));
-        ActionItemDetailResponse target = create(projectId, "Target", memberId, Priority.HIGH);
-        actionItemService.updateActionItem(target.id(), new ActionItemUpdateRequest(
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
+        ActionItemDetailResDto target = create(projectId, "Target", memberId, Priority.HIGH);
+        actionItemService.updateActionItem(target.id(), new ActionItemUpdateReqDto(
                 null, null, null, null, ActionItemStatus.IN_PROGRESS, null));
         create(projectId, "Other", memberId, Priority.LOW);
 
-        List<ActionItemListResponse> result = actionItemService.getActionItems(
+        List<ActionItemListResDto> result = actionItemService.getActionItems(
                 projectId, "IN_PROGRESS", memberId, Priority.HIGH);
 
         assertThat(result).hasSize(1);
@@ -212,78 +212,78 @@ class ActionItemServiceTest {
     @Test
     void getActionItems_activeReturnsTodoAndInProgressOnly() {
         Long projectId = createProjectAsOwner();
-        ActionItemDetailResponse todo = create(projectId, "Todo", null, null);
-        ActionItemDetailResponse inProgress = create(projectId, "InProgress", null, null);
-        actionItemService.updateActionItem(inProgress.id(), new ActionItemUpdateRequest(
+        ActionItemDetailResDto todo = create(projectId, "Todo", null, null);
+        ActionItemDetailResDto inProgress = create(projectId, "InProgress", null, null);
+        actionItemService.updateActionItem(inProgress.id(), new ActionItemUpdateReqDto(
                 null, null, null, null, ActionItemStatus.IN_PROGRESS, null));
-        ActionItemDetailResponse done = create(projectId, "Done", null, null);
-        actionItemService.updateActionItem(done.id(), new ActionItemUpdateRequest(
+        ActionItemDetailResDto done = create(projectId, "Done", null, null);
+        actionItemService.updateActionItem(done.id(), new ActionItemUpdateReqDto(
                 null, null, null, null, ActionItemStatus.DONE, null));
 
-        List<ActionItemListResponse> result = actionItemService.getActionItems(projectId, "active", null, null);
+        List<ActionItemListResDto> result = actionItemService.getActionItems(projectId, "active", null, null);
 
-        assertThat(result).extracting(ActionItemListResponse::id)
+        assertThat(result).extracting(ActionItemListResDto::id)
                 .containsExactlyInAnyOrder(todo.id(), inProgress.id());
     }
 
     @Test
     void getActionItems_activeWithAssigneeFilter() {
         Long projectId = createProjectAsOwner();
-        projectMemberService.addMember(projectId, new ProjectMemberCreateRequest(memberEmail));
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
 
-        ActionItemDetailResponse memberTodo = create(projectId, "Member Todo", memberId, null);
-        ActionItemDetailResponse memberInProgress = create(projectId, "Member InProgress", memberId, null);
-        actionItemService.updateActionItem(memberInProgress.id(), new ActionItemUpdateRequest(
+        ActionItemDetailResDto memberTodo = create(projectId, "Member Todo", memberId, null);
+        ActionItemDetailResDto memberInProgress = create(projectId, "Member InProgress", memberId, null);
+        actionItemService.updateActionItem(memberInProgress.id(), new ActionItemUpdateReqDto(
                 null, null, null, null, ActionItemStatus.IN_PROGRESS, null));
         create(projectId, "Unassigned Todo", null, null);
 
-        List<ActionItemListResponse> result = actionItemService.getActionItems(projectId, "active", memberId, null);
+        List<ActionItemListResDto> result = actionItemService.getActionItems(projectId, "active", memberId, null);
 
-        assertThat(result).extracting(ActionItemListResponse::id)
+        assertThat(result).extracting(ActionItemListResDto::id)
                 .containsExactlyInAnyOrder(memberTodo.id(), memberInProgress.id());
     }
 
     @Test
     void getActionItems_activeWithPriorityFilter() {
         Long projectId = createProjectAsOwner();
-        ActionItemDetailResponse highTodo = create(projectId, "High Todo", null, Priority.HIGH);
-        ActionItemDetailResponse highInProgress = create(projectId, "High InProgress", null, Priority.HIGH);
-        actionItemService.updateActionItem(highInProgress.id(), new ActionItemUpdateRequest(
+        ActionItemDetailResDto highTodo = create(projectId, "High Todo", null, Priority.HIGH);
+        ActionItemDetailResDto highInProgress = create(projectId, "High InProgress", null, Priority.HIGH);
+        actionItemService.updateActionItem(highInProgress.id(), new ActionItemUpdateReqDto(
                 null, null, null, null, ActionItemStatus.IN_PROGRESS, null));
         create(projectId, "Low Todo", null, Priority.LOW);
 
-        List<ActionItemListResponse> result = actionItemService.getActionItems(projectId, "active", null, Priority.HIGH);
+        List<ActionItemListResDto> result = actionItemService.getActionItems(projectId, "active", null, Priority.HIGH);
 
-        assertThat(result).extracting(ActionItemListResponse::id)
+        assertThat(result).extracting(ActionItemListResDto::id)
                 .containsExactlyInAnyOrder(highTodo.id(), highInProgress.id());
     }
 
     @Test
     void getActionItems_activeWithAssigneeAndPriorityFilter() {
         Long projectId = createProjectAsOwner();
-        projectMemberService.addMember(projectId, new ProjectMemberCreateRequest(memberEmail));
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
 
-        ActionItemDetailResponse target = create(projectId, "Target", memberId, Priority.HIGH);
+        ActionItemDetailResDto target = create(projectId, "Target", memberId, Priority.HIGH);
         create(projectId, "Wrong priority", memberId, Priority.LOW);
         create(projectId, "Wrong assignee", null, Priority.HIGH);
 
-        List<ActionItemListResponse> result = actionItemService.getActionItems(
+        List<ActionItemListResDto> result = actionItemService.getActionItems(
                 projectId, "active", memberId, Priority.HIGH);
 
-        assertThat(result).extracting(ActionItemListResponse::id)
+        assertThat(result).extracting(ActionItemListResDto::id)
                 .containsExactly(target.id());
     }
 
     @Test
     void getActionItems_activeExcludesDoneEvenWhenMatchingFilters() {
         Long projectId = createProjectAsOwner();
-        projectMemberService.addMember(projectId, new ProjectMemberCreateRequest(memberEmail));
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
 
-        ActionItemDetailResponse done = create(projectId, "Done matching filters", memberId, Priority.HIGH);
-        actionItemService.updateActionItem(done.id(), new ActionItemUpdateRequest(
+        ActionItemDetailResDto done = create(projectId, "Done matching filters", memberId, Priority.HIGH);
+        actionItemService.updateActionItem(done.id(), new ActionItemUpdateReqDto(
                 null, null, null, null, ActionItemStatus.DONE, null));
 
-        List<ActionItemListResponse> result = actionItemService.getActionItems(
+        List<ActionItemListResDto> result = actionItemService.getActionItems(
                 projectId, "active", memberId, Priority.HIGH);
 
         assertThat(result).isEmpty();
@@ -302,9 +302,9 @@ class ActionItemServiceTest {
     @Test
     void getActionItem_success() {
         Long projectId = createProjectAsOwner();
-        ActionItemDetailResponse created = create(projectId, "Task", null, null);
+        ActionItemDetailResDto created = create(projectId, "Task", null, null);
 
-        ActionItemDetailResponse fetched = actionItemService.getActionItem(created.id());
+        ActionItemDetailResDto fetched = actionItemService.getActionItem(created.id());
 
         assertThat(fetched.id()).isEqualTo(created.id());
     }
@@ -312,7 +312,7 @@ class ActionItemServiceTest {
     @Test
     void getActionItem_nonMemberDenied() {
         Long projectId = createProjectAsOwner();
-        ActionItemDetailResponse created = create(projectId, "Task", null, null);
+        ActionItemDetailResDto created = create(projectId, "Task", null, null);
 
         actingAs(outsiderId);
 
@@ -325,10 +325,10 @@ class ActionItemServiceTest {
     @Test
     void updateActionItem_success() {
         Long projectId = createProjectAsOwner();
-        ActionItemDetailResponse created = create(projectId, "Task", null, null);
+        ActionItemDetailResDto created = create(projectId, "Task", null, null);
 
-        ActionItemDetailResponse updated = actionItemService.updateActionItem(created.id(),
-                new ActionItemUpdateRequest("Updated title", null, null, LocalDate.of(2026, 12, 25), null, null));
+        ActionItemDetailResDto updated = actionItemService.updateActionItem(created.id(),
+                new ActionItemUpdateReqDto("Updated title", null, null, LocalDate.of(2026, 12, 25), null, null));
 
         assertThat(updated.title()).isEqualTo("Updated title");
         assertThat(updated.dueDate()).isEqualTo(LocalDate.of(2026, 12, 25));
@@ -337,10 +337,10 @@ class ActionItemServiceTest {
     @Test
     void updateActionItem_doneSetsCompletedAt() {
         Long projectId = createProjectAsOwner();
-        ActionItemDetailResponse created = create(projectId, "Task", null, null);
+        ActionItemDetailResDto created = create(projectId, "Task", null, null);
 
-        ActionItemDetailResponse updated = actionItemService.updateActionItem(created.id(),
-                new ActionItemUpdateRequest(null, null, null, null, ActionItemStatus.DONE, null));
+        ActionItemDetailResDto updated = actionItemService.updateActionItem(created.id(),
+                new ActionItemUpdateReqDto(null, null, null, null, ActionItemStatus.DONE, null));
 
         assertThat(updated.status()).isEqualTo(ActionItemStatus.DONE);
         assertThat(updated.completedAt()).isNotNull();
@@ -349,12 +349,12 @@ class ActionItemServiceTest {
     @Test
     void updateActionItem_backToInProgressClearsCompletedAt() {
         Long projectId = createProjectAsOwner();
-        ActionItemDetailResponse created = create(projectId, "Task", null, null);
+        ActionItemDetailResDto created = create(projectId, "Task", null, null);
         actionItemService.updateActionItem(created.id(),
-                new ActionItemUpdateRequest(null, null, null, null, ActionItemStatus.DONE, null));
+                new ActionItemUpdateReqDto(null, null, null, null, ActionItemStatus.DONE, null));
 
-        ActionItemDetailResponse reverted = actionItemService.updateActionItem(created.id(),
-                new ActionItemUpdateRequest(null, null, null, null, ActionItemStatus.IN_PROGRESS, null));
+        ActionItemDetailResDto reverted = actionItemService.updateActionItem(created.id(),
+                new ActionItemUpdateReqDto(null, null, null, null, ActionItemStatus.IN_PROGRESS, null));
 
         assertThat(reverted.completedAt()).isNull();
     }
@@ -362,7 +362,7 @@ class ActionItemServiceTest {
     @Test
     void deleteActionItem_success() {
         Long projectId = createProjectAsOwner();
-        ActionItemDetailResponse created = create(projectId, "Task", null, null);
+        ActionItemDetailResDto created = create(projectId, "Task", null, null);
 
         actionItemService.deleteActionItem(created.id());
 
@@ -372,12 +372,12 @@ class ActionItemServiceTest {
     @Test
     void deleteActionItem_removesMeetingActionLinkButKeepsMeeting() {
         Long projectId = createProjectAsOwner();
-        ActionItemDetailResponse created = create(projectId, "Task", null, null);
+        ActionItemDetailResDto created = create(projectId, "Task", null, null);
 
-        actionItemService.updateActionItem(created.id(), new ActionItemUpdateRequest(
+        actionItemService.updateActionItem(created.id(), new ActionItemUpdateReqDto(
                 null, null, null, null, ActionItemStatus.IN_PROGRESS, null));
-        MeetingDetailResponse meeting = meetingService.createMeeting(projectId,
-                new MeetingCreateRequest("Sync", LocalDateTime.of(2026, 9, 7, 10, 0), null, null,
+        MeetingDetailResDto meeting = meetingService.createMeeting(projectId,
+                new MeetingCreateReqDto("Sync", LocalDateTime.of(2026, 9, 7, 10, 0), null, null,
                         List.of(created.id())));
         assertThat(meetingActionLinkRepository.findAllByMeetingId(meeting.id())).hasSize(1);
 

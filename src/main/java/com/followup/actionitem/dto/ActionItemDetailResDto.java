@@ -6,12 +6,12 @@ import com.followup.actionitem.entity.Priority;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-public record ActionItemDetailResponse(
+public record ActionItemDetailResDto(
         Long id,
         Long projectId,
         String title,
         String description,
-        ActionItemAssigneeResponse assignee,
+        ActionItemAssigneeResDto assignee,
         LocalDate dueDate,
         ActionItemStatus status,
         Priority priority,
@@ -22,13 +22,13 @@ public record ActionItemDetailResponse(
         LocalDateTime completedAt
 ) {
 
-    public static ActionItemDetailResponse from(ActionItem actionItem) {
-        return new ActionItemDetailResponse(
+    public static ActionItemDetailResDto from(ActionItem actionItem) {
+        return new ActionItemDetailResDto(
                 actionItem.getId(),
                 actionItem.getProject().getId(),
                 actionItem.getTitle(),
                 actionItem.getDescription(),
-                actionItem.getAssignee() != null ? ActionItemAssigneeResponse.from(actionItem.getAssignee()) : null,
+                actionItem.getAssignee() != null ? ActionItemAssigneeResDto.from(actionItem.getAssignee()) : null,
                 actionItem.getDueDate(),
                 actionItem.getStatus(),
                 actionItem.getPriority(),

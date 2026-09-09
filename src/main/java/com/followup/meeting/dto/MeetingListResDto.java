@@ -4,7 +4,7 @@ import com.followup.meeting.entity.Meeting;
 import com.followup.meeting.entity.MeetingStatus;
 import java.time.LocalDateTime;
 
-public record MeetingListResponse(
+public record MeetingListResDto(
         Long id,
         String title,
         LocalDateTime scheduledAt,
@@ -13,8 +13,8 @@ public record MeetingListResponse(
         LocalDateTime createdAt
 ) {
 
-    public static MeetingListResponse from(Meeting meeting) {
-        return new MeetingListResponse(
+    public static MeetingListResDto from(Meeting meeting) {
+        return new MeetingListResDto(
                 meeting.getId(),
                 meeting.getTitle(),
                 meeting.getScheduledAt(),
