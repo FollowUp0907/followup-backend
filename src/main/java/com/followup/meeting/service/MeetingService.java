@@ -13,6 +13,7 @@ import com.followup.meeting.dto.MeetingCreateReqDto;
 import com.followup.meeting.dto.MeetingDetailResDto;
 import com.followup.meeting.dto.MeetingListResDto;
 import com.followup.meeting.dto.MeetingUpdateReqDto;
+import com.followup.meeting.entity.Decision;
 import com.followup.meeting.entity.Meeting;
 import com.followup.meeting.entity.MeetingParticipant;
 import com.followup.meeting.entity.MeetingStatus;
@@ -81,7 +82,7 @@ public class MeetingService {
                 .linkType(CARRY_OVER_LINK_TYPE)
                 .build()));
 
-        return MeetingDetailResDto.from(meeting, participants, carryOverItems);
+        return MeetingDetailResDto.from(meeting, participants, carryOverItems, List.of());
     }
 
     @Transactional(readOnly = true)
@@ -103,8 +104,9 @@ public class MeetingService {
         List<ActionItem> carryOverItems = meetingActionLinkRepository.findAllByMeetingId(meetingId).stream()
                 .map(MeetingActionLink::getActionItem)
                 .toList();
+        List<Decision> decisions = decisionRepository.findAllByMeetingIdOrderByIdAsc(meetingId);
 
-        return MeetingDetailResDto.from(meeting, participants, carryOverItems);
+        return MeetingDetailResDto.from(meeting, participants, carryOverItems, decisions);
     }
 
     @Transactional
@@ -138,8 +140,9 @@ public class MeetingService {
         List<ActionItem> carryOverItems = meetingActionLinkRepository.findAllByMeetingId(meetingId).stream()
                 .map(MeetingActionLink::getActionItem)
                 .toList();
+        List<Decision> decisions = decisionRepository.findAllByMeetingIdOrderByIdAsc(meetingId);
 
-        return MeetingDetailResDto.from(meeting, participants, carryOverItems);
+        return MeetingDetailResDto.from(meeting, participants, carryOverItems, decisions);
     }
 
     /**
