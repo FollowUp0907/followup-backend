@@ -6,6 +6,9 @@ import com.followup.actionitem.dto.ActionItemListResDto;
 import com.followup.actionitem.dto.ActionItemUpdateReqDto;
 import com.followup.actionitem.entity.Priority;
 import com.followup.actionitem.service.ActionItemService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "Action Item")
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
@@ -28,6 +32,7 @@ public class ActionItemController {
 
     private final ActionItemService actionItemService;
 
+    @Operation(summary = "후속 업무 목록 조회")
     @GetMapping("/project/{projectId}/action-items")
     public ResponseEntity<List<ActionItemListResDto>> getActionItems(
             @PathVariable Long projectId,
@@ -37,6 +42,8 @@ public class ActionItemController {
         return ResponseEntity.ok(actionItemService.getActionItems(projectId, status, assigneeId, priority));
     }
 
+    @Operation(summary = "후속 업무 생성")
+    @ApiResponse(responseCode = "201", description = "생성 성공")
     @PostMapping("/project/{projectId}/action-item")
     public ResponseEntity<ActionItemDetailResDto> createActionItem(
             @PathVariable Long projectId,
@@ -45,11 +52,13 @@ public class ActionItemController {
                 .body(actionItemService.createActionItem(projectId, request));
     }
 
+    @Operation(summary = "후속 업무 상세 조회")
     @GetMapping("/action-item/{actionItemId}")
     public ResponseEntity<ActionItemDetailResDto> getActionItem(@PathVariable Long actionItemId) {
         return ResponseEntity.ok(actionItemService.getActionItem(actionItemId));
     }
 
+    @Operation(summary = "후속 업무 수정")
     @PatchMapping("/action-item/{actionItemId}")
     public ResponseEntity<ActionItemDetailResDto> updateActionItem(
             @PathVariable Long actionItemId,
@@ -57,6 +66,8 @@ public class ActionItemController {
         return ResponseEntity.ok(actionItemService.updateActionItem(actionItemId, request));
     }
 
+    @Operation(summary = "후속 업무 삭제")
+    @ApiResponse(responseCode = "204", description = "삭제 성공")
     @DeleteMapping("/action-item/{actionItemId}")
     public ResponseEntity<Void> deleteActionItem(@PathVariable Long actionItemId) {
         actionItemService.deleteActionItem(actionItemId);
