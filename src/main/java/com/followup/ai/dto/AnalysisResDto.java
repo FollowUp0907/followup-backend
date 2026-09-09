@@ -4,20 +4,20 @@ import com.followup.ai.entity.AiAnalysisRun;
 import com.followup.ai.entity.AnalysisStatus;
 import java.time.LocalDateTime;
 
-public record AnalysisResponse(
+public record AnalysisResDto(
         Long id,
         Long meetingId,
         AnalysisStatus status,
         String modelName,
         String promptVersion,
-        AiDraftResult draft,
+        AiDraftResultDto draft,
         String errorMessage,
         LocalDateTime createdAt,
         LocalDateTime confirmedAt
 ) {
 
-    public static AnalysisResponse of(AiAnalysisRun run, AiDraftResult draft) {
-        return new AnalysisResponse(
+    public static AnalysisResDto of(AiAnalysisRun run, AiDraftResultDto draft) {
+        return new AnalysisResDto(
                 run.getId(),
                 run.getMeeting().getId(),
                 run.getStatus(),

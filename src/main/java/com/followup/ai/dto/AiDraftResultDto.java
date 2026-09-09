@@ -4,7 +4,7 @@ import com.followup.actionitem.entity.Priority;
 import java.time.LocalDate;
 import java.util.List;
 
-public record AiDraftResult(
+public record AiDraftResultDto(
         List<DraftDecision> decisions,
         List<DraftActionItem> actionItems
 ) {

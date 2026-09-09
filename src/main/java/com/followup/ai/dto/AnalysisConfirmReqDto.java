@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.util.List;
 
-public record AnalysisConfirmRequest(
+public record AnalysisConfirmReqDto(
         @Valid List<DecisionConfirmItem> decisions,
         @Valid List<ActionItemConfirmItem> actionItems
 ) {

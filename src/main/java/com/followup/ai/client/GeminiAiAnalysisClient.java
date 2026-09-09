@@ -1,6 +1,6 @@
 package com.followup.ai.client;
 
-import com.followup.ai.dto.AiDraftResult;
+import com.followup.ai.dto.AiDraftResultDto;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -16,7 +16,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * 실제 Gemini API를 호출하는 {@link AiAnalysisClient} 구현체다.
- * structured output(responseSchema)으로 AiDraftResult 형태만 반환하도록 제약한다.
+ * structured output(responseSchema)으로 AiDraftResultDto 형태만 반환하도록 제약한다.
  */
 public class GeminiAiAnalysisClient implements AiAnalysisClient {
 
@@ -101,7 +101,7 @@ public class GeminiAiAnalysisClient implements AiAnalysisClient {
     }
 
     @Override
-    public AiDraftResult analyze(String meetingContent, LocalDateTime meetingScheduledAt) {
+    public AiDraftResultDto analyze(String meetingContent, LocalDateTime meetingScheduledAt) {
         String meetingDate = meetingScheduledAt != null
                 ? meetingScheduledAt.toLocalDate().format(MEETING_DATE_FORMAT)
                 : UNKNOWN_MEETING_DATE;
@@ -140,7 +140,7 @@ public class GeminiAiAnalysisClient implements AiAnalysisClient {
 
         String text = extractText(response);
         try {
-            return objectMapper.readValue(text, AiDraftResult.class);
+            return objectMapper.readValue(text, AiDraftResultDto.class);
         } catch (Exception e) {
             log.warn("Gemini response JSON parsing failed: model={}, rawText={}", model, truncate(text));
             throw new AiAnalysisClientException(

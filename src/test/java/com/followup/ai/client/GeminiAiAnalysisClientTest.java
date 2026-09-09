@@ -10,7 +10,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.followup.actionitem.entity.Priority;
-import com.followup.ai.dto.AiDraftResult;
+import com.followup.ai.dto.AiDraftResultDto;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -76,7 +76,7 @@ class GeminiAiAnalysisClientTest {
                 .andExpect(header("x-goog-api-key", "test-api-key"))
                 .andRespond(withSuccess(geminiEnvelope(draftJson), MediaType.APPLICATION_JSON));
 
-        AiDraftResult result = client.analyze("Some meeting notes", MEETING_DATE);
+        AiDraftResultDto result = client.analyze("Some meeting notes", MEETING_DATE);
 
         assertThat(result.decisions()).hasSize(1);
         assertThat(result.decisions().get(0).content()).isEqualTo("Proceed with plan A");
@@ -92,7 +92,7 @@ class GeminiAiAnalysisClientTest {
         mockServer.expect(requestTo(ENDPOINT))
                 .andRespond(withSuccess(geminiEnvelope(draftJson), MediaType.APPLICATION_JSON));
 
-        AiDraftResult result = client.analyze("No decisions here", MEETING_DATE);
+        AiDraftResultDto result = client.analyze("No decisions here", MEETING_DATE);
 
         assertThat(result.decisions()).isEmpty();
         assertThat(result.actionItems()).isEmpty();
@@ -215,7 +215,7 @@ class GeminiAiAnalysisClientTest {
         mockServer.expect(requestTo(ENDPOINT))
                 .andRespond(withSuccess(geminiEnvelope(draftJson), MediaType.APPLICATION_JSON));
 
-        AiDraftResult result = client.analyze("문서 작업을 9/10까지 마무리하기로 함", MEETING_DATE);
+        AiDraftResultDto result = client.analyze("문서 작업을 9/10까지 마무리하기로 함", MEETING_DATE);
 
         assertThat(result.actionItems().get(0).dueDate()).isEqualTo(LocalDate.of(2026, 9, 10));
     }
@@ -228,7 +228,7 @@ class GeminiAiAnalysisClientTest {
         mockServer.expect(requestTo(ENDPOINT))
                 .andRespond(withSuccess(geminiEnvelope(draftJson), MediaType.APPLICATION_JSON));
 
-        AiDraftResult result = client.analyze("문서 작업을 9/10까지 마무리하기로 함", null);
+        AiDraftResultDto result = client.analyze("문서 작업을 9/10까지 마무리하기로 함", null);
 
         assertThat(result.actionItems().get(0).dueDate()).isNull();
     }

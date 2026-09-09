@@ -14,13 +14,13 @@ import com.followup.actionitem.entity.Priority;
 import com.followup.actionitem.entity.ActionItem;
 import com.followup.actionitem.repository.ActionItemRepository;
 import com.followup.ai.client.AiAnalysisClient;
-import com.followup.ai.dto.AiDraftResult;
-import com.followup.ai.dto.AiDraftResult.DraftActionItem;
-import com.followup.ai.dto.AiDraftResult.DraftDecision;
-import com.followup.ai.dto.AnalysisConfirmRequest;
-import com.followup.ai.dto.AnalysisConfirmRequest.ActionItemConfirmItem;
-import com.followup.ai.dto.AnalysisConfirmRequest.DecisionConfirmItem;
-import com.followup.ai.dto.AnalysisResponse;
+import com.followup.ai.dto.AiDraftResultDto;
+import com.followup.ai.dto.AiDraftResultDto.DraftActionItem;
+import com.followup.ai.dto.AiDraftResultDto.DraftDecision;
+import com.followup.ai.dto.AnalysisConfirmReqDto;
+import com.followup.ai.dto.AnalysisConfirmReqDto.ActionItemConfirmItem;
+import com.followup.ai.dto.AnalysisConfirmReqDto.DecisionConfirmItem;
+import com.followup.ai.dto.AnalysisResDto;
 import com.followup.ai.entity.AiAnalysisRun;
 import com.followup.ai.entity.AnalysisStatus;
 import com.followup.ai.repository.AiAnalysisRunRepository;
@@ -135,15 +135,15 @@ class AiAnalysisServiceTest {
         return meeting.id();
     }
 
-    private AiDraftResult sampleDraft() {
-        return new AiDraftResult(
+    private AiDraftResultDto sampleDraft() {
+        return new AiDraftResultDto(
                 List.of(new DraftDecision("Decided to proceed with plan A")),
                 List.of(new DraftActionItem("Write docs", "desc", "Owner",
                         LocalDate.of(2026, 9, 20), Priority.HIGH, "important"))
         );
     }
 
-    private AnalysisResponse generateAnalysis(Long meetingId) {
+    private AnalysisResDto generateAnalysis(Long meetingId) {
         when(aiAnalysisClient.analyze(any(), any())).thenReturn(sampleDraft());
         when(aiAnalysisClient.getModelName()).thenReturn("fake-model");
         when(aiAnalysisClient.getPromptVersion()).thenReturn("v1");
@@ -151,8 +151,8 @@ class AiAnalysisServiceTest {
         return aiAnalysisService.requestAnalysis(meetingId).response();
     }
 
-    private AnalysisConfirmRequest confirmRequest(Long assigneeUserId, Priority priority) {
-        return new AnalysisConfirmRequest(
+    private AnalysisConfirmReqDto confirmRequest(Long assigneeUserId, Priority priority) {
+        return new AnalysisConfirmReqDto(
                 List.of(new DecisionConfirmItem("다음 스프린트에서 알림 기능을 우선 개발한다.")),
                 List.of(new ActionItemConfirmItem("알림 API 설계", "알림 생성 및 조회 API 설계",
                         assigneeUserId, LocalDate.of(2026, 9, 15), priority, "다음 스프린트 핵심 기능"))
@@ -169,7 +169,7 @@ class AiAnalysisServiceTest {
 
         actingAs(ownerId);
         AiAnalysisService.AnalysisRequestResult result = aiAnalysisService.requestAnalysis(meetingId);
-        AnalysisResponse response = result.response();
+        AnalysisResDto response = result.response();
 
         assertThat(result.reused()).isFalse();
         assertThat(response.status()).isEqualTo(AnalysisStatus.GENERATED);
@@ -239,7 +239,7 @@ class AiAnalysisServiceTest {
         when(aiAnalysisClient.analyze(any(), any())).thenThrow(new RuntimeException("AI service unavailable"));
 
         actingAs(ownerId);
-        AnalysisResponse response = aiAnalysisService.requestAnalysis(meetingId).response();
+        AnalysisResDto response = aiAnalysisService.requestAnalysis(meetingId).response();
 
         assertThat(response.status()).isEqualTo(AnalysisStatus.FAILED);
         assertThat(response.errorMessage()).isEqualTo("AI service unavailable");
@@ -283,7 +283,7 @@ class AiAnalysisServiceTest {
     void requestAnalysis_reusesConfirmedAnalysisForSameInput() {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "We discussed the roadmap.");
-        AnalysisResponse generated = generateAnalysis(meetingId);
+        AnalysisResDto generated = generateAnalysis(meetingId);
         actingAs(ownerId);
         aiAnalysisService.confirmAnalysis(generated.id(), confirmRequest(null, Priority.HIGH));
 
@@ -422,9 +422,9 @@ class AiAnalysisServiceTest {
         when(aiAnalysisClient.getModelName()).thenReturn("fake-model");
         when(aiAnalysisClient.getPromptVersion()).thenReturn("v1");
         actingAs(ownerId);
-        AnalysisResponse created = aiAnalysisService.requestAnalysis(meetingId).response();
+        AnalysisResDto created = aiAnalysisService.requestAnalysis(meetingId).response();
 
-        AnalysisResponse fetched = aiAnalysisService.getAnalysis(created.id());
+        AnalysisResDto fetched = aiAnalysisService.getAnalysis(created.id());
 
         assertThat(fetched.id()).isEqualTo(created.id());
         assertThat(fetched.meetingId()).isEqualTo(meetingId);
@@ -450,7 +450,7 @@ class AiAnalysisServiceTest {
         when(aiAnalysisClient.getModelName()).thenReturn("fake-model");
         when(aiAnalysisClient.getPromptVersion()).thenReturn("v1");
         actingAs(ownerId);
-        AnalysisResponse created = aiAnalysisService.requestAnalysis(meetingId).response();
+        AnalysisResDto created = aiAnalysisService.requestAnalysis(meetingId).response();
 
         actingAs(outsiderId);
 
@@ -464,10 +464,10 @@ class AiAnalysisServiceTest {
     void confirmAnalysis_success() {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
-        AnalysisResponse generated = generateAnalysis(meetingId);
+        AnalysisResDto generated = generateAnalysis(meetingId);
 
         actingAs(ownerId);
-        AnalysisResponse confirmed = aiAnalysisService.confirmAnalysis(
+        AnalysisResDto confirmed = aiAnalysisService.confirmAnalysis(
                 generated.id(), confirmRequest(null, Priority.HIGH));
 
         assertThat(confirmed.status()).isEqualTo(AnalysisStatus.CONFIRMED);
@@ -478,7 +478,7 @@ class AiAnalysisServiceTest {
     void confirmAnalysis_createsDecisionLinkedToMeetingAndAnalysis() {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
-        AnalysisResponse generated = generateAnalysis(meetingId);
+        AnalysisResDto generated = generateAnalysis(meetingId);
 
         actingAs(ownerId);
         aiAnalysisService.confirmAnalysis(generated.id(), confirmRequest(null, Priority.HIGH));
@@ -494,7 +494,7 @@ class AiAnalysisServiceTest {
     void confirmAnalysis_createsActionItemWithOriginMeetingAndSourceAnalysis() {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
-        AnalysisResponse generated = generateAnalysis(meetingId);
+        AnalysisResDto generated = generateAnalysis(meetingId);
 
         actingAs(ownerId);
         aiAnalysisService.confirmAnalysis(generated.id(), confirmRequest(null, Priority.HIGH));
@@ -513,7 +513,7 @@ class AiAnalysisServiceTest {
     void confirmAnalysis_priorityNullDefaultsToMedium() {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
-        AnalysisResponse generated = generateAnalysis(meetingId);
+        AnalysisResDto generated = generateAnalysis(meetingId);
 
         actingAs(ownerId);
         aiAnalysisService.confirmAnalysis(generated.id(), confirmRequest(null, null));
@@ -526,7 +526,7 @@ class AiAnalysisServiceTest {
     void confirmAnalysis_assigneeNullAllowed() {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
-        AnalysisResponse generated = generateAnalysis(meetingId);
+        AnalysisResDto generated = generateAnalysis(meetingId);
 
         actingAs(ownerId);
         aiAnalysisService.confirmAnalysis(generated.id(), confirmRequest(null, Priority.HIGH));
@@ -540,7 +540,7 @@ class AiAnalysisServiceTest {
         Long projectId = createProjectAsOwner();
         projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
         Long meetingId = createMeetingWithContent(projectId, "Some content");
-        AnalysisResponse generated = generateAnalysis(meetingId);
+        AnalysisResDto generated = generateAnalysis(meetingId);
 
         actingAs(ownerId);
         aiAnalysisService.confirmAnalysis(generated.id(), confirmRequest(memberId, Priority.HIGH));
@@ -553,7 +553,7 @@ class AiAnalysisServiceTest {
     void confirmAnalysis_nonMemberAssigneeRejected() {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
-        AnalysisResponse generated = generateAnalysis(meetingId);
+        AnalysisResDto generated = generateAnalysis(meetingId);
 
         actingAs(ownerId);
 
@@ -568,7 +568,7 @@ class AiAnalysisServiceTest {
     void confirmAnalysis_alreadyConfirmedRejected() {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
-        AnalysisResponse generated = generateAnalysis(meetingId);
+        AnalysisResDto generated = generateAnalysis(meetingId);
         actingAs(ownerId);
         aiAnalysisService.confirmAnalysis(generated.id(), confirmRequest(null, Priority.HIGH));
 
@@ -585,7 +585,7 @@ class AiAnalysisServiceTest {
         Long meetingId = createMeetingWithContent(projectId, "Some content");
         when(aiAnalysisClient.analyze(any(), any())).thenThrow(new RuntimeException("boom"));
         actingAs(ownerId);
-        AnalysisResponse failed = aiAnalysisService.requestAnalysis(meetingId).response();
+        AnalysisResDto failed = aiAnalysisService.requestAnalysis(meetingId).response();
 
         assertThatThrownBy(() -> aiAnalysisService.confirmAnalysis(
                 failed.id(), confirmRequest(null, Priority.HIGH)))
@@ -612,9 +612,9 @@ class AiAnalysisServiceTest {
     void confirmAnalysis_rollsBackEverythingOnFailure() throws Exception {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
-        AnalysisResponse generated = generateAnalysis(meetingId);
+        AnalysisResDto generated = generateAnalysis(meetingId);
 
-        AnalysisConfirmRequest request = new AnalysisConfirmRequest(
+        AnalysisConfirmReqDto request = new AnalysisConfirmReqDto(
                 List.of(new DecisionConfirmItem("This decision should not survive")),
                 List.of(new ActionItemConfirmItem("Invalid assignee item", null,
                         outsiderId, null, Priority.HIGH, null)));
@@ -632,7 +632,7 @@ class AiAnalysisServiceTest {
         assertThat(countRows("decisions", "meeting_id", meetingId)).isZero();
         assertThat(countRows("action_items", "project_id", projectId)).isZero();
 
-        AnalysisResponse reloaded = aiAnalysisService.getAnalysis(generated.id());
+        AnalysisResDto reloaded = aiAnalysisService.getAnalysis(generated.id());
         assertThat(reloaded.status()).isEqualTo(AnalysisStatus.GENERATED);
     }
 
@@ -652,7 +652,7 @@ class AiAnalysisServiceTest {
     void confirmAnalysis_nonMemberDenied() {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
-        AnalysisResponse generated = generateAnalysis(meetingId);
+        AnalysisResDto generated = generateAnalysis(meetingId);
 
         actingAs(outsiderId);
 

@@ -1,9 +1,9 @@
 package com.followup.ai.client;
 
 import com.followup.actionitem.entity.Priority;
-import com.followup.ai.dto.AiDraftResult;
-import com.followup.ai.dto.AiDraftResult.DraftActionItem;
-import com.followup.ai.dto.AiDraftResult.DraftDecision;
+import com.followup.ai.dto.AiDraftResultDto;
+import com.followup.ai.dto.AiDraftResultDto.DraftActionItem;
+import com.followup.ai.dto.AiDraftResultDto.DraftDecision;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -12,8 +12,8 @@ import java.util.List;
 public class FakeAiAnalysisClient implements AiAnalysisClient {
 
     @Override
-    public AiDraftResult analyze(String meetingContent, LocalDateTime meetingScheduledAt) {
-        return new AiDraftResult(
+    public AiDraftResultDto analyze(String meetingContent, LocalDateTime meetingScheduledAt) {
+        return new AiDraftResultDto(
                 List.of(new DraftDecision("Placeholder decision generated from meeting notes")),
                 List.of(new DraftActionItem(
                         "Follow up on meeting discussion",
