@@ -87,7 +87,7 @@ class AiAnalysisServiceTest {
     private AiAnalysisRunRepository aiAnalysisRunRepository;
 
     @Autowired
-    private AiAnalysisRunTxService aiAnalysisRunTransactionService;
+    private AiAnalysisRunTxService aiAnalysisRunTxService;
 
     @Autowired
     private MeetingRepository meetingRepository;
@@ -306,7 +306,7 @@ class AiAnalysisServiceTest {
         // Seed a PROCESSING record the same way AiAnalysisService itself would, without ever
         // resolving it -- simulates a request that is still in flight.
         AiAnalysisRunTxService.AnalysisStart processing =
-                aiAnalysisRunTransactionService.startAnalysis(meetingId, ownerId, "fake-model", "v1");
+                aiAnalysisRunTxService.startAnalysis(meetingId, ownerId, "fake-model", "v1");
 
         AiAnalysisService.AnalysisRequestResult result = aiAnalysisService.requestAnalysis(meetingId);
 

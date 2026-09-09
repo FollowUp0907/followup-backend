@@ -44,7 +44,7 @@ public class AiAnalysisService {
     private final ProjectMemberRepository projectMemberRepository;
     private final UserRepository userRepository;
     private final AiAnalysisClient aiAnalysisClient;
-    private final AiAnalysisRunTxService aiAnalysisRunTransactionService;
+    private final AiAnalysisRunTxService aiAnalysisRunTxService;
     private final CurrentUserProvider currentUserProvider;
     private final ObjectMapper objectMapper;
 
@@ -54,15 +54,15 @@ public class AiAnalysisService {
         String promptVersion = aiAnalysisClient.getPromptVersion();
 
         AiAnalysisRunTxService.AnalysisStart start =
-                aiAnalysisRunTransactionService.startAnalysis(meetingId, currentUserId, modelName, promptVersion);
+                aiAnalysisRunTxService.startAnalysis(meetingId, currentUserId, modelName, promptVersion);
 
         if (!start.reused()) {
             try {
                 AiDraftResultDto draft = aiAnalysisClient.analyze(start.meetingContent(), start.meetingScheduledAt());
-                aiAnalysisRunTransactionService.completeWithSuccess(start.analysisId(), writeJson(draft));
+                aiAnalysisRunTxService.completeWithSuccess(start.analysisId(), writeJson(draft));
             } catch (Exception e) {
                 String message = e.getMessage() != null ? e.getMessage() : ErrorCode.AI_ANALYSIS_FAILED.getMessage();
-                aiAnalysisRunTransactionService.completeWithFailure(start.analysisId(), message);
+                aiAnalysisRunTxService.completeWithFailure(start.analysisId(), message);
             }
         }
 

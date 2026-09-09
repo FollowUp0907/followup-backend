@@ -46,7 +46,7 @@ class AiAnalysisRunTxServiceTest {
     private MeetingService meetingService;
 
     @Autowired
-    private AiAnalysisRunTxService aiAnalysisRunTransactionService;
+    private AiAnalysisRunTxService aiAnalysisRunTxService;
 
     @Autowired
     private AiAnalysisRunRepository aiAnalysisRunRepository;
@@ -87,7 +87,7 @@ class AiAnalysisRunTxServiceTest {
     }
 
     private AiAnalysisRunTxService.AnalysisStart start(Long meetingId) {
-        return aiAnalysisRunTransactionService.startAnalysis(meetingId, ownerId, MODEL, PROMPT_VERSION);
+        return aiAnalysisRunTxService.startAnalysis(meetingId, ownerId, MODEL, PROMPT_VERSION);
     }
 
     @Test
@@ -108,7 +108,7 @@ class AiAnalysisRunTxServiceTest {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
 
-        assertThatThrownBy(() -> aiAnalysisRunTransactionService.startAnalysis(meetingId, outsiderId, MODEL, PROMPT_VERSION))
+        assertThatThrownBy(() -> aiAnalysisRunTxService.startAnalysis(meetingId, outsiderId, MODEL, PROMPT_VERSION))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PROJECT_ACCESS_DENIED);
@@ -146,7 +146,7 @@ class AiAnalysisRunTxServiceTest {
         Long meetingId = createMeetingWithContent(projectId, "Some content");
         AiAnalysisRunTxService.AnalysisStart result = start(meetingId);
 
-        aiAnalysisRunTransactionService.completeWithSuccess(
+        aiAnalysisRunTxService.completeWithSuccess(
                 result.analysisId(), "{\"decisions\":[],\"actionItems\":[]}");
 
         AiAnalysisRun run = aiAnalysisRunRepository.findById(result.analysisId()).orElseThrow();
@@ -162,7 +162,7 @@ class AiAnalysisRunTxServiceTest {
         Long meetingId = createMeetingWithContent(projectId, "Some content");
         AiAnalysisRunTxService.AnalysisStart result = start(meetingId);
 
-        aiAnalysisRunTransactionService.completeWithFailure(result.analysisId(), "Gemini API request failed");
+        aiAnalysisRunTxService.completeWithFailure(result.analysisId(), "Gemini API request failed");
 
         AiAnalysisRun run = aiAnalysisRunRepository.findById(result.analysisId()).orElseThrow();
         assertThat(run.getStatus()).isEqualTo(AnalysisStatus.FAILED);
@@ -191,7 +191,7 @@ class AiAnalysisRunTxServiceTest {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
         AiAnalysisRunTxService.AnalysisStart first = start(meetingId);
-        aiAnalysisRunTransactionService.completeWithSuccess(first.analysisId(), "{}");
+        aiAnalysisRunTxService.completeWithSuccess(first.analysisId(), "{}");
 
         AiAnalysisRunTxService.AnalysisStart second = start(meetingId);
 
@@ -218,7 +218,7 @@ class AiAnalysisRunTxServiceTest {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
         AiAnalysisRunTxService.AnalysisStart first = start(meetingId);
-        aiAnalysisRunTransactionService.completeWithFailure(first.analysisId(), "boom");
+        aiAnalysisRunTxService.completeWithFailure(first.analysisId(), "boom");
 
         AiAnalysisRunTxService.AnalysisStart second = start(meetingId);
 
@@ -232,10 +232,10 @@ class AiAnalysisRunTxServiceTest {
         Long projectId = createProjectAsOwner();
         Long meetingId = createMeetingWithContent(projectId, "Some content");
         AiAnalysisRunTxService.AnalysisStart first = start(meetingId);
-        aiAnalysisRunTransactionService.completeWithSuccess(first.analysisId(), "{}");
+        aiAnalysisRunTxService.completeWithSuccess(first.analysisId(), "{}");
 
         AiAnalysisRunTxService.AnalysisStart second =
-                aiAnalysisRunTransactionService.startAnalysis(meetingId, ownerId, "different-model", PROMPT_VERSION);
+                aiAnalysisRunTxService.startAnalysis(meetingId, ownerId, "different-model", PROMPT_VERSION);
 
         assertThat(second.reused()).isFalse();
     }
