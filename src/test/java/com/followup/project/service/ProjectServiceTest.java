@@ -21,6 +21,9 @@ import com.followup.meeting.entity.Decision;
 import com.followup.meeting.repository.DecisionRepository;
 import com.followup.meeting.repository.MeetingRepository;
 import com.followup.meeting.service.MeetingService;
+import com.followup.notification.dto.NotificationCreateReqDto;
+import com.followup.notification.repository.NotificationRepository;
+import com.followup.notification.service.NotificationService;
 import com.followup.project.dto.ProjectCreateReqDto;
 import com.followup.project.dto.ProjectResDto;
 import com.followup.project.dto.ProjectUpdateReqDto;
@@ -73,6 +76,12 @@ class ProjectServiceTest {
 
     @Autowired
     private MeetingActionLinkRepository meetingActionLinkRepository;
+
+    @Autowired
+    private NotificationService notificationService;
+
+    @Autowired
+    private NotificationRepository notificationRepository;
 
     @MockitoBean
     private CurrentUserProvider currentUserProvider;
@@ -207,12 +216,12 @@ class ProjectServiceTest {
     }
 
     /**
-     * carry-over로 연결된 업무(meeting_action_links)와, AI 분석 이력을 origin/source로 참조하는 업무까지
-     * 모두 있는 프로젝트를 삭제해 FK 순서(meeting_action_links -> action_items -> decisions -> ai_analysis_runs
-     * -> meetings)가 실제로 안전한지 검증한다.
+     * carry-over로 연결된 업무(meeting_action_links), AI 분석 이력을 origin/source로 참조하는 업무,
+     * 그 업무에 걸린 알림(notifications)까지 모두 있는 프로젝트를 삭제해 FK 순서(notifications/meeting_action_links
+     * -> action_items -> decisions -> ai_analysis_runs -> meetings)가 실제로 안전한지 검증한다.
      */
     @Test
-    void deleteProject_cascadesMeetingsDecisionsAiRunsAndActionItems() {
+    void deleteProject_cascadesMeetingsDecisionsAiRunsActionItemsAndNotifications() {
         actingAs(ownerId);
         ProjectResDto project = projectService.createProject(new ProjectCreateReqDto("P", null));
         Long projectId = project.id();
@@ -249,6 +258,9 @@ class ProjectServiceTest {
                 .priority(Priority.MEDIUM)
                 .build());
 
+        notificationService.createOrUpdateNotification(originated.getId(),
+                new NotificationCreateReqDto(LocalDateTime.now().plusDays(1)));
+
         projectService.deleteProject(projectId);
 
         assertThat(projectRepository.findById(projectId)).isEmpty();
@@ -258,6 +270,7 @@ class ProjectServiceTest {
         assertThat(actionItemRepository.findById(carryOver.getId())).isEmpty();
         assertThat(actionItemRepository.findById(originated.getId())).isEmpty();
         assertThat(meetingActionLinkRepository.findAllByMeetingId(meeting.id())).isEmpty();
+        assertThat(notificationRepository.findByActionItemId(originated.getId())).isEmpty();
     }
 
     @Test

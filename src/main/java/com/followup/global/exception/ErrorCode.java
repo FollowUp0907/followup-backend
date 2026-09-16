@@ -33,6 +33,8 @@ public enum ErrorCode {
     EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "Token has expired"),
     ROUTE_NOT_FOUND(HttpStatus.NOT_FOUND, "No handler found for the requested path"),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "HTTP method not supported for this path"),
+    NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "Notification not found"),
+    NOTIFICATION_ACCESS_DENIED(HttpStatus.FORBIDDEN, "You do not have access to this notification"),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
 
     private final HttpStatus status;

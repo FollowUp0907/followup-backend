@@ -12,6 +12,7 @@ import com.followup.actionitem.repository.MeetingActionLinkRepository;
 import com.followup.global.exception.BusinessException;
 import com.followup.global.exception.ErrorCode;
 import com.followup.global.security.CurrentUserProvider;
+import com.followup.notification.repository.NotificationRepository;
 import com.followup.project.entity.Project;
 import com.followup.project.repository.ProjectMemberRepository;
 import com.followup.project.repository.ProjectRepository;
@@ -33,6 +34,7 @@ public class ActionItemService {
     private final ProjectMemberRepository projectMemberRepository;
     private final UserRepository userRepository;
     private final MeetingActionLinkRepository meetingActionLinkRepository;
+    private final NotificationRepository notificationRepository;
     private final CurrentUserProvider currentUserProvider;
 
     /** {@code status=active}는 TODO + IN_PROGRESS를 뜻하는 가상 필터다({@link ActionItemStatus} 값 아님). */
@@ -114,6 +116,7 @@ public class ActionItemService {
         requireMember(actionItem.getProject().getId(), currentUserProvider.getCurrentUserId());
 
         meetingActionLinkRepository.deleteAllByActionItemId(actionItemId);
+        notificationRepository.deleteByActionItemId(actionItemId);
         actionItemRepository.delete(actionItem);
     }
 

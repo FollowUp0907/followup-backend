@@ -9,6 +9,7 @@ import com.followup.global.security.CurrentUserProvider;
 import com.followup.meeting.repository.DecisionRepository;
 import com.followup.meeting.repository.MeetingParticipantRepository;
 import com.followup.meeting.repository.MeetingRepository;
+import com.followup.notification.repository.NotificationRepository;
 import com.followup.project.dto.ProjectCreateReqDto;
 import com.followup.project.dto.ProjectResDto;
 import com.followup.project.dto.ProjectUpdateReqDto;
@@ -37,6 +38,7 @@ public class ProjectService {
     private final AiAnalysisRunRepository aiAnalysisRunRepository;
     private final MeetingActionLinkRepository meetingActionLinkRepository;
     private final MeetingParticipantRepository meetingParticipantRepository;
+    private final NotificationRepository notificationRepository;
     private final CurrentUserProvider currentUserProvider;
 
     /**
@@ -109,9 +111,11 @@ public class ProjectService {
         requireOwner(projectId, currentUserProvider.getCurrentUserId());
 
         List<Long> meetingIds = meetingRepository.findIdsByProjectId(projectId);
+        List<Long> actionItemIds = actionItemRepository.findIdsByProjectId(projectId);
 
         meetingActionLinkRepository.deleteAllByMeetingIdIn(meetingIds);
         meetingParticipantRepository.deleteAllByMeetingIdIn(meetingIds);
+        notificationRepository.deleteAllByActionItemIdIn(actionItemIds);
         actionItemRepository.deleteAllByProjectId(projectId);
         meetingIds.forEach(decisionRepository::deleteAllByMeetingId);
         meetingIds.forEach(aiAnalysisRunRepository::deleteAllByMeetingId);
