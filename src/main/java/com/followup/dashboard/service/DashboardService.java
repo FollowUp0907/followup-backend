@@ -58,7 +58,7 @@ public class DashboardService {
 
         ActionItemSummary summary = buildSummary(actionItems, today);
         List<DueSoonActionItem> dueSoonActionItems = buildDueSoon(actionItems, today);
-        List<RecentMeeting> recentMeetings = meetingRepository.findTop3ByProjectIdOrderByScheduledAtDesc(projectId)
+        List<RecentMeeting> recentMeetings = meetingRepository.findTop3ByProjectIdAndDeletedAtIsNullOrderByScheduledAtDesc(projectId)
                 .stream()
                 .map(DashboardService::toRecentMeeting)
                 .toList();

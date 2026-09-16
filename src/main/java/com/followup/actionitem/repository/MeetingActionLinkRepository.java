@@ -10,5 +10,7 @@ public interface MeetingActionLinkRepository extends JpaRepository<MeetingAction
 
     void deleteAllByMeetingId(Long meetingId);
 
+    void deleteAllByMeetingIdIn(List<Long> meetingIds);
+
     void deleteAllByActionItemId(Long actionItemId);
 }

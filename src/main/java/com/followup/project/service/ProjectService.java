@@ -1,9 +1,13 @@
 package com.followup.project.service;
 
 import com.followup.actionitem.repository.ActionItemRepository;
+import com.followup.actionitem.repository.MeetingActionLinkRepository;
+import com.followup.ai.repository.AiAnalysisRunRepository;
 import com.followup.global.exception.BusinessException;
 import com.followup.global.exception.ErrorCode;
 import com.followup.global.security.CurrentUserProvider;
+import com.followup.meeting.repository.DecisionRepository;
+import com.followup.meeting.repository.MeetingParticipantRepository;
 import com.followup.meeting.repository.MeetingRepository;
 import com.followup.project.dto.ProjectCreateReqDto;
 import com.followup.project.dto.ProjectResDto;
@@ -29,6 +33,10 @@ public class ProjectService {
     private final UserRepository userRepository;
     private final MeetingRepository meetingRepository;
     private final ActionItemRepository actionItemRepository;
+    private final DecisionRepository decisionRepository;
+    private final AiAnalysisRunRepository aiAnalysisRunRepository;
+    private final MeetingActionLinkRepository meetingActionLinkRepository;
+    private final MeetingParticipantRepository meetingParticipantRepository;
     private final CurrentUserProvider currentUserProvider;
 
     /**
@@ -91,17 +99,23 @@ public class ProjectService {
     }
 
     /**
-     * OWNER만 삭제할 수 있으며, Meeting/ActionItem이 남아 있으면 409로 막는다.
-     * cascade 삭제를 두지 않았으므로 실제 업무 데이터를 먼저 정리해야 한다.
+     * OWNER만 삭제할 수 있다. Meeting은 soft-delete 대상이라 findIdsByProjectId로 삭제 여부와 무관하게
+     * 전체 id를 구한 뒤, 하위 데이터를 애플리케이션 레벨에서 명시적 순서로 정리하고 마지막에 하드 삭제한다.
+     * meeting_action_links는 action_items.id를 참조하므로(FK RESTRICT) action_items보다 먼저 지운다.
      */
     @Transactional
     public void deleteProject(Long projectId) {
         Project project = getProjectOrThrow(projectId);
         requireOwner(projectId, currentUserProvider.getCurrentUserId());
 
-        if (meetingRepository.existsByProjectId(projectId) || actionItemRepository.existsByProjectId(projectId)) {
-            throw new BusinessException(ErrorCode.PROJECT_DELETE_CONFLICT);
-        }
+        List<Long> meetingIds = meetingRepository.findIdsByProjectId(projectId);
+
+        meetingActionLinkRepository.deleteAllByMeetingIdIn(meetingIds);
+        meetingParticipantRepository.deleteAllByMeetingIdIn(meetingIds);
+        actionItemRepository.deleteAllByProjectId(projectId);
+        meetingIds.forEach(decisionRepository::deleteAllByMeetingId);
+        meetingIds.forEach(aiAnalysisRunRepository::deleteAllByMeetingId);
+        meetingRepository.deleteAllById(meetingIds);
 
         projectMemberRepository.deleteAllByProjectId(projectId);
         projectRepository.delete(project);

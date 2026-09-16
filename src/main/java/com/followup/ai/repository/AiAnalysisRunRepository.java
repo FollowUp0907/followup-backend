@@ -12,6 +12,8 @@ public interface AiAnalysisRunRepository extends JpaRepository<AiAnalysisRun, Lo
 
     boolean existsByMeetingId(Long meetingId);
 
+    void deleteAllByMeetingId(Long meetingId);
+
     /** 같은 회의·입력 지문·모델/프롬프트 버전의 재사용 가능한 분석을 찾는다. FAILED는 호출 측에서 제외한다. */
     Optional<AiAnalysisRun> findFirstByMeetingIdAndInputHashAndModelNameAndPromptVersionAndStatusInOrderByCreatedAtDesc(
             Long meetingId, String inputHash, String modelName, String promptVersion, List<AnalysisStatus> statuses);

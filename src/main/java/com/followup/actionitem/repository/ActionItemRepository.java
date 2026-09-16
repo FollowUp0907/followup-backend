@@ -11,4 +11,6 @@ public interface ActionItemRepository extends JpaRepository<ActionItem, Long>, A
     List<ActionItem> findAllByProjectIdAndAssigneeId(Long projectId, Long assigneeId);
 
     List<ActionItem> findAllByOriginMeetingId(Long originMeetingId);
+
+    void deleteAllByProjectId(Long projectId);
 }

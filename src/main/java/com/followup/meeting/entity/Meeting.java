@@ -61,6 +61,9 @@ public class Meeting {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
     @Builder
     public Meeting(Project project, String title, LocalDateTime scheduledAt, String content,
                    MeetingStatus status, User createdBy) {
@@ -82,6 +85,11 @@ public class Meeting {
         if (content != null) {
             this.content = content;
         }
+    }
+
+    /** 결정사항/AI분석이력/업무 등 하위 데이터는 그대로 둔 채 회의만 조회 대상에서 숨긴다. */
+    public void softDelete() {
+        this.deletedAt = LocalDateTime.now();
     }
 
     @PrePersist

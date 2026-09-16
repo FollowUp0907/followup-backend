@@ -5,7 +5,6 @@ import com.followup.actionitem.entity.ActionItemStatus;
 import com.followup.actionitem.repository.ActionItemRepository;
 import com.followup.actionitem.entity.MeetingActionLink;
 import com.followup.actionitem.repository.MeetingActionLinkRepository;
-import com.followup.ai.repository.AiAnalysisRunRepository;
 import com.followup.global.exception.BusinessException;
 import com.followup.global.exception.ErrorCode;
 import com.followup.global.security.CurrentUserProvider;
@@ -43,7 +42,6 @@ public class MeetingService {
     private final ProjectMemberRepository projectMemberRepository;
     private final UserRepository userRepository;
     private final ActionItemRepository actionItemRepository;
-    private final AiAnalysisRunRepository aiAnalysisRunRepository;
     private final DecisionRepository decisionRepository;
     private final CurrentUserProvider currentUserProvider;
 
@@ -90,7 +88,7 @@ public class MeetingService {
         getProjectOrThrow(projectId);
         requireMember(projectId, currentUserProvider.getCurrentUserId());
 
-        return meetingRepository.findAllByProjectIdOrderByScheduledAtDesc(projectId).stream()
+        return meetingRepository.findAllByProjectIdAndDeletedAtIsNullOrderByScheduledAtDesc(projectId).stream()
                 .map(MeetingListResDto::from)
                 .toList();
     }
@@ -146,24 +144,15 @@ public class MeetingService {
     }
 
     /**
-     * AiAnalysisRun/Decision 이력이 있으면 409로 막아 확정된 이력을 보존한다.
-     * ActionItem은 삭제하지 않고 originMeeting 연결만 해제한다.
+     * soft delete로 전환한다. 결정사항/AI분석이력/업무/참가자/연결 등 하위 데이터는 전부 그대로 유지하며,
+     * 회의는 조회(getMeeting/getMeetings) 대상에서만 제외된다.
      */
     @Transactional
     public void deleteMeeting(Long meetingId) {
         Meeting meeting = getMeetingOrThrow(meetingId);
         requireMember(meeting.getProject().getId(), currentUserProvider.getCurrentUserId());
 
-        if (aiAnalysisRunRepository.existsByMeetingId(meetingId) || decisionRepository.existsByMeetingId(meetingId)) {
-            throw new BusinessException(ErrorCode.MEETING_DELETE_CONFLICT);
-        }
-
-        meetingActionLinkRepository.deleteAllByMeetingId(meetingId);
-        meetingParticipantRepository.deleteAllByMeetingId(meetingId);
-        actionItemRepository.findAllByOriginMeetingId(meetingId)
-                .forEach(ActionItem::detachOriginMeeting);
-
-        meetingRepository.delete(meeting);
+        meeting.softDelete();
     }
 
     private List<Long> distinct(List<Long> ids) {
@@ -208,8 +197,12 @@ public class MeetingService {
     }
 
     private Meeting getMeetingOrThrow(Long meetingId) {
-        return meetingRepository.findById(meetingId)
+        Meeting meeting = meetingRepository.findById(meetingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEETING_NOT_FOUND));
+        if (meeting.getDeletedAt() != null) {
+            throw new BusinessException(ErrorCode.MEETING_NOT_FOUND);
+        }
+        return meeting;
     }
 
     private void requireMember(Long projectId, Long userId) {

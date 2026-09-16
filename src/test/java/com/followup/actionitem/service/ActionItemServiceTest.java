@@ -8,6 +8,7 @@ import com.followup.actionitem.dto.ActionItemCreateReqDto;
 import com.followup.actionitem.dto.ActionItemDetailResDto;
 import com.followup.actionitem.dto.ActionItemListResDto;
 import com.followup.actionitem.dto.ActionItemUpdateReqDto;
+import com.followup.actionitem.entity.ActionItem;
 import com.followup.actionitem.entity.ActionItemStatus;
 import com.followup.actionitem.entity.Priority;
 import com.followup.actionitem.repository.ActionItemRepository;
@@ -22,6 +23,7 @@ import com.followup.meeting.service.MeetingService;
 import com.followup.project.dto.ProjectCreateReqDto;
 import com.followup.project.dto.ProjectMemberCreateReqDto;
 import com.followup.project.dto.ProjectResDto;
+import com.followup.project.repository.ProjectRepository;
 import com.followup.project.service.ProjectMemberService;
 import com.followup.project.service.ProjectService;
 import com.followup.user.entity.User;
@@ -64,6 +66,9 @@ class ActionItemServiceTest {
 
     @Autowired
     private MeetingRepository meetingRepository;
+
+    @Autowired
+    private ProjectRepository projectRepository;
 
     @MockitoBean
     private CurrentUserProvider currentUserProvider;
@@ -357,6 +362,29 @@ class ActionItemServiceTest {
                 new ActionItemUpdateReqDto(null, null, null, null, ActionItemStatus.IN_PROGRESS, null));
 
         assertThat(reverted.completedAt()).isNull();
+    }
+
+    @Test
+    void getActionItem_showsOriginMeetingTitleEvenAfterMeetingSoftDeleted() {
+        Long projectId = createProjectAsOwner();
+        MeetingDetailResDto meeting = meetingService.createMeeting(projectId,
+                new MeetingCreateReqDto("Kickoff", LocalDateTime.of(2026, 9, 7, 10, 0), null, null, null));
+
+        ActionItem item = actionItemRepository.save(ActionItem.builder()
+                .project(projectRepository.getReferenceById(projectId))
+                .originMeeting(meetingRepository.getReferenceById(meeting.id()))
+                .title("From meeting")
+                .status(ActionItemStatus.TODO)
+                .priority(Priority.MEDIUM)
+                .build());
+
+        meetingService.deleteMeeting(meeting.id());
+
+        ActionItemDetailResDto fetched = actionItemService.getActionItem(item.getId());
+
+        assertThat(fetched.originMeetingId()).isEqualTo(meeting.id());
+        assertThat(fetched.originMeetingTitle()).isEqualTo("Kickoff");
+        assertThat(fetched.originMeetingDeleted()).isTrue();
     }
 
     @Test

@@ -4,9 +4,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import com.followup.actionitem.entity.ActionItem;
+import com.followup.actionitem.entity.ActionItemStatus;
+import com.followup.actionitem.entity.Priority;
+import com.followup.actionitem.repository.ActionItemRepository;
+import com.followup.actionitem.repository.MeetingActionLinkRepository;
+import com.followup.ai.entity.AiAnalysisRun;
+import com.followup.ai.entity.AnalysisStatus;
+import com.followup.ai.repository.AiAnalysisRunRepository;
 import com.followup.global.exception.BusinessException;
 import com.followup.global.exception.ErrorCode;
 import com.followup.global.security.CurrentUserProvider;
+import com.followup.meeting.dto.MeetingCreateReqDto;
+import com.followup.meeting.dto.MeetingDetailResDto;
+import com.followup.meeting.entity.Decision;
+import com.followup.meeting.repository.DecisionRepository;
+import com.followup.meeting.repository.MeetingRepository;
+import com.followup.meeting.service.MeetingService;
 import com.followup.project.dto.ProjectCreateReqDto;
 import com.followup.project.dto.ProjectResDto;
 import com.followup.project.dto.ProjectUpdateReqDto;
@@ -16,6 +30,7 @@ import com.followup.project.repository.ProjectMemberRepository;
 import com.followup.project.repository.ProjectRepository;
 import com.followup.user.entity.User;
 import com.followup.user.repository.UserRepository;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +55,24 @@ class ProjectServiceTest {
 
     @Autowired
     private ProjectRepository projectRepository;
+
+    @Autowired
+    private MeetingService meetingService;
+
+    @Autowired
+    private MeetingRepository meetingRepository;
+
+    @Autowired
+    private ActionItemRepository actionItemRepository;
+
+    @Autowired
+    private DecisionRepository decisionRepository;
+
+    @Autowired
+    private AiAnalysisRunRepository aiAnalysisRunRepository;
+
+    @Autowired
+    private MeetingActionLinkRepository meetingActionLinkRepository;
 
     @MockitoBean
     private CurrentUserProvider currentUserProvider;
@@ -171,6 +204,60 @@ class ProjectServiceTest {
         projectService.deleteProject(created.id());
 
         assertThat(projectRepository.findById(created.id())).isEmpty();
+    }
+
+    /**
+     * carry-over로 연결된 업무(meeting_action_links)와, AI 분석 이력을 origin/source로 참조하는 업무까지
+     * 모두 있는 프로젝트를 삭제해 FK 순서(meeting_action_links -> action_items -> decisions -> ai_analysis_runs
+     * -> meetings)가 실제로 안전한지 검증한다.
+     */
+    @Test
+    void deleteProject_cascadesMeetingsDecisionsAiRunsAndActionItems() {
+        actingAs(ownerId);
+        ProjectResDto project = projectService.createProject(new ProjectCreateReqDto("P", null));
+        Long projectId = project.id();
+
+        ActionItem carryOver = actionItemRepository.save(ActionItem.builder()
+                .project(projectRepository.getReferenceById(projectId))
+                .title("Carry over task")
+                .status(ActionItemStatus.TODO)
+                .priority(Priority.MEDIUM)
+                .build());
+
+        MeetingDetailResDto meeting = meetingService.createMeeting(projectId,
+                new MeetingCreateReqDto("Sync", LocalDateTime.of(2026, 9, 7, 10, 0), null, null,
+                        List.of(carryOver.getId())));
+        assertThat(meetingActionLinkRepository.findAllByMeetingId(meeting.id())).hasSize(1);
+
+        Decision decision = decisionRepository.save(Decision.builder()
+                .meeting(meetingRepository.getReferenceById(meeting.id()))
+                .content("Decided")
+                .build());
+
+        AiAnalysisRun run = aiAnalysisRunRepository.save(AiAnalysisRun.builder()
+                .meeting(meetingRepository.getReferenceById(meeting.id()))
+                .requestedBy(userRepository.getReferenceById(ownerId))
+                .status(AnalysisStatus.GENERATED)
+                .build());
+
+        ActionItem originated = actionItemRepository.save(ActionItem.builder()
+                .project(projectRepository.getReferenceById(projectId))
+                .originMeeting(meetingRepository.getReferenceById(meeting.id()))
+                .sourceAnalysis(aiAnalysisRunRepository.getReferenceById(run.getId()))
+                .title("From AI")
+                .status(ActionItemStatus.TODO)
+                .priority(Priority.MEDIUM)
+                .build());
+
+        projectService.deleteProject(projectId);
+
+        assertThat(projectRepository.findById(projectId)).isEmpty();
+        assertThat(meetingRepository.findById(meeting.id())).isEmpty();
+        assertThat(decisionRepository.findById(decision.getId())).isEmpty();
+        assertThat(aiAnalysisRunRepository.findById(run.getId())).isEmpty();
+        assertThat(actionItemRepository.findById(carryOver.getId())).isEmpty();
+        assertThat(actionItemRepository.findById(originated.getId())).isEmpty();
+        assertThat(meetingActionLinkRepository.findAllByMeetingId(meeting.id())).isEmpty();
     }
 
     @Test

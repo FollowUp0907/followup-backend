@@ -12,4 +12,6 @@ public interface DecisionRepository extends JpaRepository<Decision, Long> {
     List<Decision> findAllByMeetingIdOrderByIdAsc(Long meetingId);
 
     boolean existsByMeetingId(Long meetingId);
+
+    void deleteAllByMeetingId(Long meetingId);
 }

@@ -325,18 +325,34 @@ class MeetingServiceTest {
     }
 
     @Test
-    void deleteMeeting_success() {
+    void deleteMeeting_softDeletesButKeepsRow() {
         Long projectId = createProjectAsOwner();
         actingAs(ownerId);
         MeetingDetailResDto created = meetingService.createMeeting(projectId, baseRequest(null, null));
 
         meetingService.deleteMeeting(created.id());
 
-        assertThat(meetingRepository.findById(created.id())).isEmpty();
+        assertThat(meetingRepository.findById(created.id())).isPresent();
+        assertThat(meetingRepository.findById(created.id()).get().getDeletedAt()).isNotNull();
     }
 
     @Test
-    void deleteMeeting_keepsActionItemButRemovesLink() {
+    void deleteMeeting_excludedFromListAndGetThrowsNotFound() {
+        Long projectId = createProjectAsOwner();
+        actingAs(ownerId);
+        MeetingDetailResDto created = meetingService.createMeeting(projectId, baseRequest(null, null));
+
+        meetingService.deleteMeeting(created.id());
+
+        assertThat(meetingService.getMeetings(projectId)).isEmpty();
+        assertThatThrownBy(() -> meetingService.getMeeting(created.id()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.MEETING_NOT_FOUND);
+    }
+
+    @Test
+    void deleteMeeting_keepsActionItemAndLink() {
         Long projectId = createProjectAsOwner();
         ActionItem todo = createActionItem(projectId, ActionItemStatus.TODO);
 
@@ -348,11 +364,11 @@ class MeetingServiceTest {
         meetingService.deleteMeeting(created.id());
 
         assertThat(actionItemRepository.findById(todo.getId())).isPresent();
-        assertThat(meetingActionLinkRepository.findAllByMeetingId(created.id())).isEmpty();
+        assertThat(meetingActionLinkRepository.findAllByMeetingId(created.id())).hasSize(1);
     }
 
     @Test
-    void deleteMeeting_conflictWhenAiAnalysisRunExists() {
+    void deleteMeeting_succeedsAndKeepsHistoryWhenAiAnalysisRunExists() {
         Long projectId = createProjectAsOwner();
         actingAs(ownerId);
         MeetingDetailResDto created = meetingService.createMeeting(projectId, baseRequest(null, null));
@@ -362,17 +378,14 @@ class MeetingServiceTest {
                 .status(AnalysisStatus.GENERATED)
                 .build());
 
-        assertThatThrownBy(() -> meetingService.deleteMeeting(created.id()))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.MEETING_DELETE_CONFLICT);
+        meetingService.deleteMeeting(created.id());
 
         assertThat(meetingRepository.findById(created.id())).isPresent();
         assertThat(aiAnalysisRunRepository.findById(run.getId())).isPresent();
     }
 
     @Test
-    void deleteMeeting_conflictWhenDecisionExists() {
+    void deleteMeeting_succeedsAndKeepsHistoryWhenDecisionExists() {
         Long projectId = createProjectAsOwner();
         actingAs(ownerId);
         MeetingDetailResDto created = meetingService.createMeeting(projectId, baseRequest(null, null));
@@ -381,26 +394,9 @@ class MeetingServiceTest {
                 .content("Decided to proceed")
                 .build());
 
-        assertThatThrownBy(() -> meetingService.deleteMeeting(created.id()))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.MEETING_DELETE_CONFLICT);
+        meetingService.deleteMeeting(created.id());
 
         assertThat(meetingRepository.findById(created.id())).isPresent();
         assertThat(decisionRepository.findById(decision.getId())).isPresent();
-    }
-
-    @Test
-    void deleteMeeting_succeedsWhenNoAiOrDecisionHistory() {
-        Long projectId = createProjectAsOwner();
-        actingAs(ownerId);
-        MeetingDetailResDto created = meetingService.createMeeting(projectId, baseRequest(null, null));
-
-        assertThat(aiAnalysisRunRepository.existsByMeetingId(created.id())).isFalse();
-        assertThat(decisionRepository.existsByMeetingId(created.id())).isFalse();
-
-        meetingService.deleteMeeting(created.id());
-
-        assertThat(meetingRepository.findById(created.id())).isEmpty();
     }
 }
