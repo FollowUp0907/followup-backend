@@ -38,10 +38,16 @@ public class ProjectMemberService {
                 .toList();
     }
 
-    /** OWNER만 가능하며, 이미 가입된 사용자를 email로 찾아 추가한다. 미가입 email은 404로 처리한다. */
+    /**
+     * OWNER만 가능하며, 이미 가입된 사용자를 email로 찾아 추가한다. 미가입 email은 404로 처리한다.
+     * Project를 비관적 쓰기 락으로 먼저 잠가 같은 프로젝트에 대한 동시 addMember 요청 자체를
+     * 직렬화한다 — 그래서 존재 여부 확인(existsByProjectIdAndUserId)과 insert를 별도 트랜잭션으로
+     * 쪼개지 않고 하나의 트랜잭션 안에서 그대로 처리해도 레이스가 나지 않는다.
+     */
     @Transactional
     public ProjectMemberResDto addMember(Long projectId, ProjectMemberCreateReqDto request) {
-        Project project = getProjectOrThrow(projectId);
+        Project project = projectRepository.findByIdForUpdate(projectId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROJECT_NOT_FOUND));
         requireOwner(projectId, currentUserProvider.getCurrentUserId());
 
         User user = userRepository.findByEmail(request.email())

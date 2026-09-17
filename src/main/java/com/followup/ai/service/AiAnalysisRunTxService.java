@@ -41,10 +41,15 @@ public class AiAnalysisRunTxService {
     /**
      * 같은 회의·입력 지문·모델/프롬프트 버전의 재사용 가능한 분석이 있으면 그대로 반환하고,
      * 없으면 새 PROCESSING row를 만든다. 변경되지 않은 회의록에 Gemini를 다시 호출하지 않기 위함이다.
+     * (meeting_id, input_hash, model_name, prompt_version)에는 DB unique 제약이 없어(FAILED 재시도를
+     * 허용해야 해서 단순 유니크 제약을 걸기 어렵다), 같은 회의에 대한 재사용 판단+생성 자체를
+     * 비관적 쓰기 락으로 직렬화해 동시 요청이 똑같은 분석을 중복 생성/중복 호출하지 않게 막는다.
+     * 이 트랜잭션은 재사용 판단과 row 생성까지만 담당하고, 실제 Gemini 호출은 이 락/트랜잭션 밖인
+     * {@link AiAnalysisService#requestAnalysis}에서 이어서 수행된다.
      */
     @Transactional
     public AnalysisStart startAnalysis(Long meetingId, Long currentUserId, String modelName, String promptVersion) {
-        Meeting meeting = meetingRepository.findById(meetingId)
+        Meeting meeting = meetingRepository.findByIdForUpdate(meetingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEETING_NOT_FOUND));
         Long projectId = meeting.getProject().getId();
         if (!projectMemberRepository.existsByProjectIdAndUserId(projectId, currentUserId)) {
