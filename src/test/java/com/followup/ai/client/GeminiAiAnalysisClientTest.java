@@ -191,6 +191,52 @@ class GeminiAiAnalysisClientTest {
     }
 
     @Test
+    void analyze_retriesOn503AndSucceedsOnThirdAttempt() {
+        String draftJson = "{\"decisions\":[],\"actionItems\":[]}";
+        mockServer.expect(requestTo(ENDPOINT))
+                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE).body("overloaded"));
+        mockServer.expect(requestTo(ENDPOINT))
+                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE).body("overloaded"));
+        mockServer.expect(requestTo(ENDPOINT))
+                .andRespond(withSuccess(geminiEnvelope(draftJson), MediaType.APPLICATION_JSON));
+
+        AiDraftResultDto result = client.analyze("Some content", MEETING_DATE);
+
+        assertThat(result.decisions()).isEmpty();
+        mockServer.verify();
+    }
+
+    @Test
+    void analyze_doesNotRetryOn401() {
+        mockServer.expect(requestTo(ENDPOINT))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED).body("invalid api key"));
+
+        assertThatThrownBy(() -> client.analyze("Some content", MEETING_DATE))
+                .isInstanceOf(AiAnalysisClientException.class)
+                .hasMessageContaining("status=401");
+
+        mockServer.verify();
+    }
+
+    @Test
+    void analyze_throwsAfterExhaustingRetriesOn503() {
+        mockServer.expect(requestTo(ENDPOINT))
+                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE).body("overloaded"));
+        mockServer.expect(requestTo(ENDPOINT))
+                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE).body("overloaded"));
+        mockServer.expect(requestTo(ENDPOINT))
+                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE).body("overloaded"));
+        mockServer.expect(requestTo(ENDPOINT))
+                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE).body("overloaded"));
+
+        assertThatThrownBy(() -> client.analyze("Some content", MEETING_DATE))
+                .isInstanceOf(AiAnalysisClientException.class)
+                .hasMessageContaining("status=503");
+
+        mockServer.verify();
+    }
+
+    @Test
     void analyze_promptMarksMeetingDateUnknownWhenScheduledAtNull() {
         mockServer.expect(requestTo(ENDPOINT))
                 .andExpect(request -> {

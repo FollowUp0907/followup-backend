@@ -15,6 +15,7 @@ import com.followup.user.repository.UserRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,7 +39,11 @@ public class NotificationService {
         return notifications.stream().map(NotificationResDto::of).toList();
     }
 
-    /** 업무 하나당 알림은 1건만 유지한다. 이미 있으면 설정자/제목/시각을 덮어쓰고, 없으면 새로 만든다. */
+    /**
+     * 업무 하나당 알림은 1건만 유지한다. 이미 있으면 설정자/제목/시각을 덮어쓰고, 없으면 새로 만든다.
+     * 조회 후 없음을 확인하고 insert하는 사이 동시 요청이 먼저 만들었다면, notifications.action_item_id
+     * UNIQUE 제약 위반이 나는데, 이 경우 그 알림을 다시 조회해 update로 덮어써 정상 응답을 반환한다.
+     */
     @Transactional
     public NotificationResDto createOrUpdateNotification(Long actionItemId, NotificationCreateReqDto request) {
         ActionItem actionItem = getActionItemOrThrow(actionItemId);
@@ -49,19 +54,24 @@ public class NotificationService {
         Notification notification = notificationRepository.findByActionItemId(actionItemId).orElse(null);
 
         if (notification == null) {
-            notification = Notification.builder()
-                    .user(user)
-                    .project(actionItem.getProject())
-                    .actionItem(actionItem)
-                    .taskTitle(actionItem.getTitle())
-                    .remindAt(request.remindAt())
-                    .build();
-            notificationRepository.save(notification);
-        } else {
-            notification.reassignTo(user);
-            notification.update(actionItem.getTitle(), request.remindAt());
+            try {
+                notification = Notification.builder()
+                        .user(user)
+                        .project(actionItem.getProject())
+                        .actionItem(actionItem)
+                        .taskTitle(actionItem.getTitle())
+                        .remindAt(request.remindAt())
+                        .build();
+                notificationRepository.save(notification);
+                return NotificationResDto.of(notification);
+            } catch (DataIntegrityViolationException e) {
+                notification = notificationRepository.findByActionItemId(actionItemId)
+                        .orElseThrow(() -> e);
+            }
         }
 
+        notification.reassignTo(user);
+        notification.update(actionItem.getTitle(), request.remindAt());
         return NotificationResDto.of(notification);
     }
 

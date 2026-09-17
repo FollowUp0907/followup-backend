@@ -1,10 +1,12 @@
 package com.followup.ai.client;
 
+import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.ObjectMapper;
 
@@ -15,12 +17,20 @@ import tools.jackson.databind.ObjectMapper;
 @Configuration
 public class AiAnalysisClientConfig {
 
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(30);
+
     @Bean
     @ConditionalOnProperty(name = "GEMINI_API_KEY")
     public AiAnalysisClient geminiAiAnalysisClient(ObjectMapper objectMapper,
                                                     @Value("${gemini.api-key}") String apiKey,
                                                     @Value("${gemini.model}") String model) {
-        return new GeminiAiAnalysisClient(RestClient.builder(), objectMapper, apiKey, model);
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(CONNECT_TIMEOUT);
+        requestFactory.setReadTimeout(READ_TIMEOUT);
+
+        return new GeminiAiAnalysisClient(
+                RestClient.builder().requestFactory(requestFactory), objectMapper, apiKey, model);
     }
 
     @Bean

@@ -13,5 +13,5 @@ public interface DecisionRepository extends JpaRepository<Decision, Long> {
 
     boolean existsByMeetingId(Long meetingId);
 
-    void deleteAllByMeetingId(Long meetingId);
+    void deleteAllByMeetingIdIn(List<Long> meetingIds);
 }

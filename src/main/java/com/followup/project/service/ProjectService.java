@@ -117,8 +117,8 @@ public class ProjectService {
         meetingParticipantRepository.deleteAllByMeetingIdIn(meetingIds);
         notificationRepository.deleteAllByActionItemIdIn(actionItemIds);
         actionItemRepository.deleteAllByProjectId(projectId);
-        meetingIds.forEach(decisionRepository::deleteAllByMeetingId);
-        meetingIds.forEach(aiAnalysisRunRepository::deleteAllByMeetingId);
+        decisionRepository.deleteAllByMeetingIdIn(meetingIds);
+        aiAnalysisRunRepository.deleteAllByMeetingIdIn(meetingIds);
         meetingRepository.deleteAllById(meetingIds);
 
         projectMemberRepository.deleteAllByProjectId(projectId);

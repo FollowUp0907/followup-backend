@@ -4,6 +4,7 @@ import com.followup.ai.dto.AiDraftResultDto;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -25,6 +26,12 @@ public class GeminiAiAnalysisClient implements AiAnalysisClient {
     private static final String PROMPT_VERSION = "gemini-v1";
     private static final String BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
     private static final int MAX_LOGGED_BODY_LENGTH = 1000;
+
+    // 503(과부하)/429(요청 제한)만 일시적 오류로 보고 재시도한다. 401/400은 재시도해도 결과가
+    // 똑같은 구조적 오류라 즉시 실패시킨다. 1s -> 2s -> 4s 지수 백오프, 총 대기시간 상한은 7초다.
+    private static final int MAX_RETRIES = 3;
+    private static final long INITIAL_BACKOFF_MS = 1000L;
+    private static final Set<Integer> RETRYABLE_STATUS_CODES = Set.of(429, 503);
 
     // Gemini의 Schema.type은 대문자 전용 enum이다(STRING/OBJECT/ARRAY). 소문자를 쓰면 400 오류가 난다.
     private static final String RESPONSE_SCHEMA_JSON = """
@@ -111,32 +118,7 @@ public class GeminiAiAnalysisClient implements AiAnalysisClient {
                 List.of(new GeminiRequest.Content("user", List.of(new GeminiRequest.Part(prompt)))),
                 new GeminiRequest.GenerationConfig("application/json", responseSchema));
 
-        GeminiResponse response;
-        try {
-            response = restClient.post()
-                    .uri("/{model}:generateContent", model)
-                    .header("x-goog-api-key", apiKey)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(request)
-                    .retrieve()
-                    .body(GeminiResponse.class);
-        } catch (RestClientResponseException e) {
-            // 4xx/5xx: 에러 응답 바디는 API 키를 포함하지 않으므로 그대로 노출해도 안전하다.
-            int status = e.getStatusCode().value();
-            String body = truncate(e.getResponseBodyAsString());
-            log.warn("Gemini API HTTP failure: model={}, status={}, body={}", model, status, body);
-            throw new AiAnalysisClientException(
-                    "Gemini API request failed: status=%d, message=%s".formatted(status, body), e);
-        } catch (ResourceAccessException e) {
-            // 네트워크 실패라 응답 자체가 없어 status/body를 남길 수 없다.
-            log.warn("Gemini API network failure: model={}, reason={}", model, e.getMessage());
-            throw new AiAnalysisClientException(
-                    "Gemini API request failed: network error, reason=%s".formatted(e.getMessage()), e);
-        } catch (RestClientException e) {
-            log.warn("Gemini API call failed: model={}, reason={}", model, e.getMessage());
-            throw new AiAnalysisClientException(
-                    "Gemini API request failed: reason=%s".formatted(e.getMessage()), e);
-        }
+        GeminiResponse response = callGeminiWithRetry(request);
 
         String text = extractText(response);
         try {
@@ -146,6 +128,56 @@ public class GeminiAiAnalysisClient implements AiAnalysisClient {
             throw new AiAnalysisClientException(
                     "Failed to parse Gemini response as JSON: model=%s, reason=%s"
                             .formatted(model, e.getMessage()), e);
+        }
+    }
+
+    /**
+     * 503/429는 지수 백오프로 최대 {@value #MAX_RETRIES}회 재시도하고, 그 외 4xx/5xx와 네트워크 오류는
+     * 즉시 실패시킨다.
+     */
+    private GeminiResponse callGeminiWithRetry(GeminiRequest request) {
+        long backoffMs = INITIAL_BACKOFF_MS;
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return restClient.post()
+                        .uri("/{model}:generateContent", model)
+                        .header("x-goog-api-key", apiKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(request)
+                        .retrieve()
+                        .body(GeminiResponse.class);
+            } catch (RestClientResponseException e) {
+                // 4xx/5xx: 에러 응답 바디는 API 키를 포함하지 않으므로 그대로 노출해도 안전하다.
+                int status = e.getStatusCode().value();
+                String body = truncate(e.getResponseBodyAsString());
+                if (!RETRYABLE_STATUS_CODES.contains(status) || attempt > MAX_RETRIES) {
+                    log.warn("Gemini API HTTP failure: model={}, status={}, body={}", model, status, body);
+                    throw new AiAnalysisClientException(
+                            "Gemini API request failed: status=%d, message=%s".formatted(status, body), e);
+                }
+                log.warn("Gemini API returned status={}, retrying ({}/{}) after {}ms: model={}",
+                        status, attempt, MAX_RETRIES, backoffMs, model);
+                sleep(backoffMs);
+                backoffMs *= 2;
+            } catch (ResourceAccessException e) {
+                // 네트워크 실패라 응답 자체가 없어 status/body를 남길 수 없다.
+                log.warn("Gemini API network failure: model={}, reason={}", model, e.getMessage());
+                throw new AiAnalysisClientException(
+                        "Gemini API request failed: network error, reason=%s".formatted(e.getMessage()), e);
+            } catch (RestClientException e) {
+                log.warn("Gemini API call failed: model={}, reason={}", model, e.getMessage());
+                throw new AiAnalysisClientException(
+                        "Gemini API request failed: reason=%s".formatted(e.getMessage()), e);
+            }
+        }
+    }
+
+    private void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AiAnalysisClientException("Gemini API retry wait was interrupted", e);
         }
     }
 
