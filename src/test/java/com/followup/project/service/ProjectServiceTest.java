@@ -21,9 +21,8 @@ import com.followup.meeting.entity.Decision;
 import com.followup.meeting.repository.DecisionRepository;
 import com.followup.meeting.repository.MeetingRepository;
 import com.followup.meeting.service.MeetingService;
-import com.followup.notification.dto.NotificationCreateReqDto;
+import com.followup.notification.entity.Notification;
 import com.followup.notification.repository.NotificationRepository;
-import com.followup.notification.service.NotificationService;
 import com.followup.project.dto.ProjectCreateReqDto;
 import com.followup.project.dto.ProjectResDto;
 import com.followup.project.dto.ProjectUpdateReqDto;
@@ -76,9 +75,6 @@ class ProjectServiceTest {
 
     @Autowired
     private MeetingActionLinkRepository meetingActionLinkRepository;
-
-    @Autowired
-    private NotificationService notificationService;
 
     @Autowired
     private NotificationRepository notificationRepository;
@@ -258,8 +254,13 @@ class ProjectServiceTest {
                 .priority(Priority.MEDIUM)
                 .build());
 
-        notificationService.createOrUpdateNotification(originated.getId(),
-                new NotificationCreateReqDto(LocalDateTime.now().plusDays(1)));
+        notificationRepository.save(Notification.builder()
+                .user(userRepository.getReferenceById(ownerId))
+                .project(projectRepository.getReferenceById(projectId))
+                .actionItem(actionItemRepository.getReferenceById(originated.getId()))
+                .taskTitle("From AI")
+                .remindAt(LocalDateTime.now().plusDays(1))
+                .build());
 
         projectService.deleteProject(projectId);
 

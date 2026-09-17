@@ -3,6 +3,7 @@ package com.followup.ai.service;
 import com.followup.actionitem.entity.ActionItem;
 import com.followup.actionitem.entity.ActionItemStatus;
 import com.followup.actionitem.entity.Priority;
+import com.followup.actionitem.event.TaskAssignedEvent;
 import com.followup.actionitem.repository.ActionItemRepository;
 import com.followup.ai.client.AiAnalysisClient;
 import com.followup.ai.dto.AiDraftResultDto;
@@ -25,6 +26,7 @@ import com.followup.user.entity.User;
 import com.followup.user.repository.UserRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -46,6 +48,7 @@ public class AiAnalysisService {
     private final AiAnalysisClient aiAnalysisClient;
     private final AiAnalysisRunTxService aiAnalysisRunTxService;
     private final CurrentUserProvider currentUserProvider;
+    private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
 
     public AnalysisRequestResult requestAnalysis(Long meetingId) {
@@ -83,7 +86,8 @@ public class AiAnalysisService {
         AiAnalysisRun run = getAnalysisOrThrow(analysisId);
         Meeting meeting = run.getMeeting();
         Project project = meeting.getProject();
-        requireMember(project.getId(), currentUserProvider.getCurrentUserId());
+        Long actorId = currentUserProvider.getCurrentUserId();
+        requireMember(project.getId(), actorId);
 
         if (run.getStatus() == AnalysisStatus.CONFIRMED) {
             throw new BusinessException(ErrorCode.ANALYSIS_ALREADY_CONFIRMED);
@@ -101,18 +105,25 @@ public class AiAnalysisService {
         }
 
         for (ActionItemConfirmItem item : orEmpty(request.actionItems())) {
-            actionItemRepository.save(ActionItem.builder()
+            User assignee = resolveAssignee(project.getId(), item.assigneeUserId());
+            ActionItem actionItem = ActionItem.builder()
                     .project(project)
                     .originMeeting(meeting)
-                    .assignee(resolveAssignee(project.getId(), item.assigneeUserId()))
+                    .assignee(assignee)
                     .sourceAnalysis(run)
+                    .createdBy(userRepository.getReferenceById(actorId))
                     .title(item.title())
                     .description(item.description())
                     .dueDate(item.dueDate())
                     .status(ActionItemStatus.TODO)
                     .priority(item.priority() != null ? item.priority() : Priority.MEDIUM)
                     .priorityReason(item.priorityReason())
-                    .build());
+                    .build();
+            actionItemRepository.save(actionItem);
+
+            if (assignee != null && !actorId.equals(assignee.getId())) {
+                eventPublisher.publishEvent(new TaskAssignedEvent(actionItem, actorId));
+            }
         }
 
         run.confirm();

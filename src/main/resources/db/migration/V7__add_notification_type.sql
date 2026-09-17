@@ -1,0 +1,1 @@
+ALTER TABLE notifications ADD COLUMN type VARCHAR(30) NULL;

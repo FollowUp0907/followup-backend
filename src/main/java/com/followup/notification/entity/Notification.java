@@ -5,6 +5,8 @@ import com.followup.project.entity.Project;
 import com.followup.user.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -56,13 +58,19 @@ public class Notification {
     @Column(name = "read_at")
     private LocalDateTime readAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type", length = 30)
+    private NotificationType type;
+
     @Builder
-    public Notification(User user, Project project, ActionItem actionItem, String taskTitle, LocalDateTime remindAt) {
+    public Notification(User user, Project project, ActionItem actionItem, String taskTitle, LocalDateTime remindAt,
+                         NotificationType type) {
         this.user = user;
         this.project = project;
         this.actionItem = actionItem;
         this.taskTitle = taskTitle;
         this.remindAt = remindAt;
+        this.type = type;
     }
 
     public void markAsRead() {

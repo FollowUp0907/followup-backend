@@ -7,6 +7,9 @@ import com.followup.actionitem.dto.ActionItemUpdateReqDto;
 import com.followup.actionitem.entity.ActionItem;
 import com.followup.actionitem.entity.ActionItemStatus;
 import com.followup.actionitem.entity.Priority;
+import com.followup.actionitem.event.TaskAssignedEvent;
+import com.followup.actionitem.event.TaskCompletedEvent;
+import com.followup.actionitem.event.TaskUpdatedEvent;
 import com.followup.actionitem.repository.ActionItemRepository;
 import com.followup.actionitem.repository.MeetingActionLinkRepository;
 import com.followup.global.exception.BusinessException;
@@ -20,6 +23,7 @@ import com.followup.user.entity.User;
 import com.followup.user.repository.UserRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +39,7 @@ public class ActionItemService {
     private final UserRepository userRepository;
     private final MeetingActionLinkRepository meetingActionLinkRepository;
     private final NotificationRepository notificationRepository;
+    private final ApplicationEventPublisher eventPublisher;
     private final CurrentUserProvider currentUserProvider;
 
     /** {@code status=active}는 TODO + IN_PROGRESS를 뜻하는 가상 필터다({@link ActionItemStatus} 값 아님). */
@@ -58,7 +63,8 @@ public class ActionItemService {
     @Transactional
     public ActionItemDetailResDto createActionItem(Long projectId, ActionItemCreateReqDto request) {
         Project project = getProjectOrThrow(projectId);
-        requireMember(projectId, currentUserProvider.getCurrentUserId());
+        Long actorId = currentUserProvider.getCurrentUserId();
+        requireMember(projectId, actorId);
 
         User assignee = resolveAssignee(projectId, request.assigneeUserId());
 
@@ -67,6 +73,7 @@ public class ActionItemService {
                 .originMeeting(null)
                 .assignee(assignee)
                 .sourceAnalysis(null)
+                .createdBy(userRepository.getReferenceById(actorId))
                 .title(request.title())
                 .description(request.description())
                 .dueDate(request.dueDate())
@@ -76,6 +83,10 @@ public class ActionItemService {
                 .completedAt(null)
                 .build();
         actionItemRepository.save(actionItem);
+
+        if (assignee != null && !actorId.equals(assignee.getId())) {
+            eventPublisher.publishEvent(new TaskAssignedEvent(actionItem, actorId));
+        }
 
         return ActionItemDetailResDto.from(actionItem);
     }
@@ -91,22 +102,64 @@ public class ActionItemService {
     public ActionItemDetailResDto updateActionItem(Long actionItemId, ActionItemUpdateReqDto request) {
         ActionItem actionItem = getActionItemOrThrow(actionItemId);
         Long projectId = actionItem.getProject().getId();
-        requireMember(projectId, currentUserProvider.getCurrentUserId());
+        Long actorId = currentUserProvider.getCurrentUserId();
+        requireMember(projectId, actorId);
 
         if (request.title() != null && request.title().isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
+
+        User prevAssignee = actionItem.getAssignee();
+        ActionItemStatus prevStatus = actionItem.getStatus();
+        boolean fieldsChanged = isChanged(request.title(), actionItem.getTitle())
+                || isChanged(request.description(), actionItem.getDescription())
+                || isChanged(request.dueDate(), actionItem.getDueDate())
+                || isChanged(request.priority(), actionItem.getPriority());
+
         actionItem.update(request.title(), request.description(), request.dueDate(), request.priority());
 
+        User newAssignee = null;
+        boolean assigneeChanged = false;
         if (request.assigneeUserId() != null) {
-            actionItem.assignTo(resolveAssignee(projectId, request.assigneeUserId()));
+            newAssignee = resolveAssignee(projectId, request.assigneeUserId());
+            Long prevAssigneeId = prevAssignee != null ? prevAssignee.getId() : null;
+            assigneeChanged = !newAssignee.getId().equals(prevAssigneeId);
+            actionItem.assignTo(newAssignee);
         }
 
         if (request.status() != null) {
             actionItem.changeStatus(request.status());
         }
 
+        publishUpdateEvents(actionItem, actorId, prevAssignee, prevStatus, assigneeChanged, newAssignee, fieldsChanged);
+
         return ActionItemDetailResDto.from(actionItem);
+    }
+
+    /**
+     * 담당자 변경이 우선이라, TaskAssignedEvent가 발행되는 경우엔 TaskUpdatedEvent를 같이 발행하지 않는다.
+     * status만 바뀐 경우(칸반 드래그)는 fieldsChanged가 false이므로 TaskUpdatedEvent 대상이 아니다.
+     */
+    private void publishUpdateEvents(ActionItem actionItem, Long actorId, User prevAssignee, ActionItemStatus prevStatus,
+                                      boolean assigneeChanged, User newAssignee, boolean fieldsChanged) {
+        if (assigneeChanged && !actorId.equals(newAssignee.getId())) {
+            eventPublisher.publishEvent(new TaskAssignedEvent(actionItem, actorId));
+        } else if (fieldsChanged) {
+            Long prevAssigneeId = prevAssignee != null ? prevAssignee.getId() : null;
+            Long currentAssigneeId = actionItem.getAssignee() != null ? actionItem.getAssignee().getId() : null;
+            boolean actorIsAssignee = actorId.equals(prevAssigneeId) || actorId.equals(currentAssigneeId);
+            if (!actorIsAssignee) {
+                eventPublisher.publishEvent(new TaskUpdatedEvent(actionItem, actorId));
+            }
+        }
+
+        if (prevStatus != ActionItemStatus.DONE && actionItem.getStatus() == ActionItemStatus.DONE) {
+            eventPublisher.publishEvent(new TaskCompletedEvent(actionItem, actorId));
+        }
+    }
+
+    private boolean isChanged(Object requestValue, Object currentValue) {
+        return requestValue != null && !requestValue.equals(currentValue);
     }
 
     /** MeetingActionLink만 제거하고 연결된 Meeting은 유지한다. */

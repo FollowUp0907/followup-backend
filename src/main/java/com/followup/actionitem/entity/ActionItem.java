@@ -55,6 +55,10 @@ public class ActionItem {
     @JoinColumn(name = "source_analysis_id")
     private AiAnalysisRun sourceAnalysis;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by")
+    private User createdBy;
+
     @Column(name = "title", nullable = false, length = 255)
     private String title;
 
@@ -86,12 +90,13 @@ public class ActionItem {
 
     @Builder
     public ActionItem(Project project, Meeting originMeeting, User assignee, AiAnalysisRun sourceAnalysis,
-                       String title, String description, LocalDate dueDate, ActionItemStatus status,
+                       User createdBy, String title, String description, LocalDate dueDate, ActionItemStatus status,
                        Priority priority, String priorityReason, LocalDateTime completedAt) {
         this.project = project;
         this.originMeeting = originMeeting;
         this.assignee = assignee;
         this.sourceAnalysis = sourceAnalysis;
+        this.createdBy = createdBy;
         this.title = title;
         this.description = description;
         this.dueDate = dueDate;
