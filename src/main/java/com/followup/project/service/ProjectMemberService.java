@@ -69,7 +69,7 @@ public class ProjectMemberService {
 
     /**
      * OWNER만 가능하며, OWNER 역할은 제거할 수 없다(소유권 이전 기능이 아직 없음).
-     * 제거되는 멤버가 담당 중이던 ActionItem은 assignee를 함께 해제한다.
+     * 제거되는 멤버가 담당자로 걸려 있던 ActionItem에서는 그 사람만 담당자 목록에서 뺀다.
      */
     @Transactional
     public void removeMember(Long projectId, Long userId) {
@@ -83,8 +83,8 @@ public class ProjectMemberService {
             throw new BusinessException(ErrorCode.PROJECT_OWNER_CANNOT_BE_REMOVED);
         }
 
-        actionItemRepository.findAllByProjectIdAndAssigneeId(projectId, userId)
-                .forEach(actionItem -> actionItem.unassign());
+        actionItemRepository.findAllByProjectIdAndAssigneesId(projectId, userId)
+                .forEach(actionItem -> actionItem.removeAssignee(userId));
 
         projectMemberRepository.delete(member);
     }

@@ -24,7 +24,9 @@ import com.followup.project.entity.Project;
 import com.followup.project.repository.ProjectMemberRepository;
 import com.followup.user.entity.User;
 import com.followup.user.repository.UserRepository;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -105,11 +107,12 @@ public class AiAnalysisService {
         }
 
         for (ActionItemConfirmItem item : orEmpty(request.actionItems())) {
-            User assignee = resolveAssignee(project.getId(), item.assigneeUserId());
+            // AI는 담당자를 최대 한 명만 추천해 초안에 담아 내려주지만(그 추천 로직은 그대로 둔다),
+            // 확정 시점에는 사용자가 assigneeUserIds로 여러 명을 추가로 선택해 넘길 수 있다.
+            Set<User> assignees = resolveAssignees(project.getId(), orEmpty(item.assigneeUserIds()));
             ActionItem actionItem = ActionItem.builder()
                     .project(project)
                     .originMeeting(meeting)
-                    .assignee(assignee)
                     .sourceAnalysis(run)
                     .createdBy(userRepository.getReferenceById(actorId))
                     .title(item.title())
@@ -119,11 +122,12 @@ public class AiAnalysisService {
                     .priority(item.priority() != null ? item.priority() : Priority.MEDIUM)
                     .priorityReason(item.priorityReason())
                     .build();
+            actionItem.replaceAssignees(assignees);
             actionItemRepository.save(actionItem);
 
-            if (assignee != null && !actorId.equals(assignee.getId())) {
-                eventPublisher.publishEvent(new TaskAssignedEvent(actionItem, actorId));
-            }
+            assignees.stream()
+                    .filter(user -> !actorId.equals(user.getId()))
+                    .forEach(user -> eventPublisher.publishEvent(new TaskAssignedEvent(actionItem, actorId, user.getId())));
         }
 
         run.confirm();
@@ -143,14 +147,15 @@ public class AiAnalysisService {
         return list == null ? List.of() : list;
     }
 
-    private User resolveAssignee(Long projectId, Long assigneeUserId) {
-        if (assigneeUserId == null) {
-            return null;
+    private Set<User> resolveAssignees(Long projectId, List<Long> assigneeUserIds) {
+        Set<User> assignees = new LinkedHashSet<>();
+        for (Long userId : assigneeUserIds) {
+            if (!projectMemberRepository.existsByProjectIdAndUserId(projectId, userId)) {
+                throw new BusinessException(ErrorCode.INVALID_ANALYSIS_ASSIGNEE);
+            }
+            assignees.add(userRepository.getReferenceById(userId));
         }
-        if (!projectMemberRepository.existsByProjectIdAndUserId(projectId, assigneeUserId)) {
-            throw new BusinessException(ErrorCode.INVALID_ANALYSIS_ASSIGNEE);
-        }
-        return userRepository.getReferenceById(assigneeUserId);
+        return assignees;
     }
 
     private AiAnalysisRun getAnalysisOrThrow(Long analysisId) {

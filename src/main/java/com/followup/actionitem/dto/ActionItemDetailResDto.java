@@ -4,15 +4,18 @@ import com.followup.actionitem.entity.ActionItem;
 import com.followup.actionitem.entity.ActionItemStatus;
 import com.followup.actionitem.entity.Priority;
 import com.followup.meeting.entity.Meeting;
+import com.followup.user.entity.User;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.List;
 
 public record ActionItemDetailResDto(
         Long id,
         Long projectId,
         String title,
         String description,
-        ActionItemAssigneeResDto assignee,
+        List<ActionItemAssigneeResDto> assignees,
         LocalDate dueDate,
         ActionItemStatus status,
         Priority priority,
@@ -32,7 +35,10 @@ public record ActionItemDetailResDto(
                 actionItem.getProject().getId(),
                 actionItem.getTitle(),
                 actionItem.getDescription(),
-                actionItem.getAssignee() != null ? ActionItemAssigneeResDto.from(actionItem.getAssignee()) : null,
+                actionItem.getAssignees().stream()
+                        .sorted(Comparator.comparing(User::getId))
+                        .map(ActionItemAssigneeResDto::from)
+                        .toList(),
                 actionItem.getDueDate(),
                 actionItem.getStatus(),
                 actionItem.getPriority(),

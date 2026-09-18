@@ -20,6 +20,7 @@ import com.followup.project.repository.ProjectRepository;
 import com.followup.user.entity.User;
 import com.followup.user.repository.UserRepository;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -210,16 +211,17 @@ class ProjectMemberServiceTest {
 
         ActionItem actionItem = actionItemRepository.save(ActionItem.builder()
                 .project(projectRepository.getReferenceById(projectId))
-                .assignee(userRepository.getReferenceById(memberId))
                 .title("Task")
                 .status(ActionItemStatus.TODO)
                 .priority(Priority.MEDIUM)
                 .build());
+        actionItem.replaceAssignees(Set.of(userRepository.getReferenceById(memberId)));
+        actionItemRepository.save(actionItem);
 
         projectMemberService.removeMember(projectId, memberId);
 
         ActionItem reloaded = actionItemRepository.findById(actionItem.getId()).orElseThrow();
-        assertThat(reloaded.getAssignee()).isNull();
+        assertThat(reloaded.getAssignees()).isEmpty();
     }
 
     @Test

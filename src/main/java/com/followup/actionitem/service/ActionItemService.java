@@ -21,7 +21,10 @@ import com.followup.project.repository.ProjectMemberRepository;
 import com.followup.project.repository.ProjectRepository;
 import com.followup.user.entity.User;
 import com.followup.user.repository.UserRepository;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -66,12 +69,11 @@ public class ActionItemService {
         Long actorId = currentUserProvider.getCurrentUserId();
         requireMember(projectId, actorId);
 
-        User assignee = resolveAssignee(projectId, request.assigneeUserId());
+        Set<User> assignees = resolveAssignees(projectId, request.assigneeUserIds());
 
         ActionItem actionItem = ActionItem.builder()
                 .project(project)
                 .originMeeting(null)
-                .assignee(assignee)
                 .sourceAnalysis(null)
                 .createdBy(userRepository.getReferenceById(actorId))
                 .title(request.title())
@@ -82,11 +84,12 @@ public class ActionItemService {
                 .priorityReason(null)
                 .completedAt(null)
                 .build();
+        actionItem.replaceAssignees(assignees);
         actionItemRepository.save(actionItem);
 
-        if (assignee != null && !actorId.equals(assignee.getId())) {
-            eventPublisher.publishEvent(new TaskAssignedEvent(actionItem, actorId));
-        }
+        assignees.stream()
+                .filter(user -> !actorId.equals(user.getId()))
+                .forEach(user -> eventPublisher.publishEvent(new TaskAssignedEvent(actionItem, actorId, user.getId())));
 
         return ActionItemDetailResDto.from(actionItem);
     }
@@ -109,7 +112,6 @@ public class ActionItemService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
 
-        User prevAssignee = actionItem.getAssignee();
         ActionItemStatus prevStatus = actionItem.getStatus();
         boolean fieldsChanged = isChanged(request.title(), actionItem.getTitle())
                 || isChanged(request.description(), actionItem.getDescription())
@@ -118,39 +120,35 @@ public class ActionItemService {
 
         actionItem.update(request.title(), request.description(), request.dueDate(), request.priority());
 
-        User newAssignee = null;
-        boolean assigneeChanged = false;
-        if (request.assigneeUserId() != null) {
-            newAssignee = resolveAssignee(projectId, request.assigneeUserId());
-            Long prevAssigneeId = prevAssignee != null ? prevAssignee.getId() : null;
-            assigneeChanged = !newAssignee.getId().equals(prevAssigneeId);
-            actionItem.assignTo(newAssignee);
+        Set<Long> addedAssigneeIds = Set.of();
+        if (request.assigneeUserIds() != null) {
+            Set<Long> prevAssigneeIds = actionItem.getAssignees().stream()
+                    .map(User::getId)
+                    .collect(Collectors.toSet());
+            Set<User> newAssignees = resolveAssignees(projectId, request.assigneeUserIds());
+            addedAssigneeIds = newAssignees.stream()
+                    .map(User::getId)
+                    .filter(id -> !prevAssigneeIds.contains(id))
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            actionItem.replaceAssignees(newAssignees);
         }
 
         if (request.status() != null) {
             actionItem.changeStatus(request.status());
         }
 
-        publishUpdateEvents(actionItem, actorId, prevAssignee, prevStatus, assigneeChanged, newAssignee, fieldsChanged);
+        publishUpdateEvents(actionItem, actorId, prevStatus, fieldsChanged);
+        addedAssigneeIds.stream()
+                .filter(id -> !actorId.equals(id))
+                .forEach(id -> eventPublisher.publishEvent(new TaskAssignedEvent(actionItem, actorId, id)));
 
         return ActionItemDetailResDto.from(actionItem);
     }
 
-    /**
-     * 담당자 변경이 우선이라, TaskAssignedEvent가 발행되는 경우엔 TaskUpdatedEvent를 같이 발행하지 않는다.
-     * status만 바뀐 경우(칸반 드래그)는 fieldsChanged가 false이므로 TaskUpdatedEvent 대상이 아니다.
-     */
-    private void publishUpdateEvents(ActionItem actionItem, Long actorId, User prevAssignee, ActionItemStatus prevStatus,
-                                      boolean assigneeChanged, User newAssignee, boolean fieldsChanged) {
-        if (assigneeChanged && !actorId.equals(newAssignee.getId())) {
-            eventPublisher.publishEvent(new TaskAssignedEvent(actionItem, actorId));
-        } else if (fieldsChanged) {
-            Long prevAssigneeId = prevAssignee != null ? prevAssignee.getId() : null;
-            Long currentAssigneeId = actionItem.getAssignee() != null ? actionItem.getAssignee().getId() : null;
-            boolean actorIsAssignee = actorId.equals(prevAssigneeId) || actorId.equals(currentAssigneeId);
-            if (!actorIsAssignee) {
-                eventPublisher.publishEvent(new TaskUpdatedEvent(actionItem, actorId));
-            }
+    /** 담당자 목록이 바뀐 사람에 대한 알림은 별도 처리되므로, 여기서는 내용 수정/완료 이벤트만 다룬다. */
+    private void publishUpdateEvents(ActionItem actionItem, Long actorId, ActionItemStatus prevStatus, boolean fieldsChanged) {
+        if (fieldsChanged) {
+            eventPublisher.publishEvent(new TaskUpdatedEvent(actionItem, actorId));
         }
 
         if (prevStatus != ActionItemStatus.DONE && actionItem.getStatus() == ActionItemStatus.DONE) {
@@ -181,17 +179,21 @@ public class ActionItemService {
         }
     }
 
-    /** 담당자는 같은 프로젝트 멤버만 지정할 수 있다. */
-    private User resolveAssignee(Long projectId, Long assigneeUserId) {
-        if (assigneeUserId == null) {
-            return null;
+    /** 담당자는 같은 프로젝트 멤버만 지정할 수 있다. 중복 id는 자동으로 하나로 합쳐진다. */
+    private Set<User> resolveAssignees(Long projectId, List<Long> assigneeUserIds) {
+        if (assigneeUserIds == null || assigneeUserIds.isEmpty()) {
+            return new LinkedHashSet<>();
         }
-        User user = userRepository.findById(assigneeUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-        if (!projectMemberRepository.existsByProjectIdAndUserId(projectId, assigneeUserId)) {
-            throw new BusinessException(ErrorCode.INVALID_ACTION_ITEM_ASSIGNEE);
+        Set<User> assignees = new LinkedHashSet<>();
+        for (Long userId : new LinkedHashSet<>(assigneeUserIds)) {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+            if (!projectMemberRepository.existsByProjectIdAndUserId(projectId, userId)) {
+                throw new BusinessException(ErrorCode.INVALID_ACTION_ITEM_ASSIGNEE);
+            }
+            assignees.add(user);
         }
-        return user;
+        return assignees;
     }
 
     private Project getProjectOrThrow(Long projectId) {

@@ -1,7 +1,6 @@
 package com.followup.actionitem.repository;
 
 import static com.followup.actionitem.entity.QActionItem.actionItem;
-import static com.followup.user.entity.QUser.user;
 
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
@@ -22,6 +21,7 @@ public class ActionItemRepositoryImpl implements ActionItemRepositoryCustom {
     public List<ActionItem> search(Long projectId, ActionItemStatus status, Long assigneeId, Priority priority) {
         return queryFactory
                 .selectFrom(actionItem)
+                .distinct()
                 .where(
                         projectIdEq(projectId),
                         statusEq(status),
@@ -36,6 +36,7 @@ public class ActionItemRepositoryImpl implements ActionItemRepositoryCustom {
     public List<ActionItem> findActiveByProjectId(Long projectId, Long assigneeId, Priority priority) {
         return queryFactory
                 .selectFrom(actionItem)
+                .distinct()
                 .where(
                         projectIdEq(projectId),
                         actionItem.status.in(ActionItemStatus.TODO, ActionItemStatus.IN_PROGRESS),
@@ -47,10 +48,11 @@ public class ActionItemRepositoryImpl implements ActionItemRepositoryCustom {
     }
 
     @Override
-    public List<ActionItem> findAllByProjectIdFetchAssignee(Long projectId) {
+    public List<ActionItem> findAllByProjectIdFetchAssignees(Long projectId) {
         return queryFactory
                 .selectFrom(actionItem)
-                .leftJoin(actionItem.assignee, user).fetchJoin()
+                .distinct()
+                .leftJoin(actionItem.assignees).fetchJoin()
                 .where(projectIdEq(projectId))
                 .fetch();
     }
@@ -63,8 +65,9 @@ public class ActionItemRepositoryImpl implements ActionItemRepositoryCustom {
         return status != null ? actionItem.status.eq(status) : null;
     }
 
+    /** "내 업무"는 담당자 목록에 포함된 업무 전부를 뜻한다. */
     private BooleanExpression assigneeIdEq(Long assigneeId) {
-        return assigneeId != null ? actionItem.assignee.id.eq(assigneeId) : null;
+        return assigneeId != null ? actionItem.assignees.any().id.eq(assigneeId) : null;
     }
 
     private BooleanExpression priorityEq(Priority priority) {

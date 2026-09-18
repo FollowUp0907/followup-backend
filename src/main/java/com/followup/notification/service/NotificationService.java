@@ -14,7 +14,6 @@ import com.followup.notification.repository.NotificationReadRepository;
 import com.followup.notification.repository.NotificationRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -57,10 +56,23 @@ public class NotificationService {
         return result;
     }
 
-    /** 작업 1의 병합 목록을 그대로 재사용해 안 읽은 것만 센다 — 계산 로직을 중복 작성하지 않기 위함이다. */
+    /**
+     * getNotifications()와 같은 "안 읽음" 기준을 세 개의 COUNT 전용 쿼리로 계산한다 — 목록 전체를
+     * 만들고 크기만 세지 않는다. 경계값(오늘/dueSoonLimit/DONE 제외)은 isOverdue/isDueSoon과
+     * dueSoonLimit()을 그대로 재사용해 getNotifications()와 기준이 어긋나지 않게 한다.
+     */
     @Transactional(readOnly = true)
     public long getUnreadCount() {
-        return getNotifications(false).stream().filter(n -> n.readAt() == null).count();
+        Long userId = currentUserProvider.getCurrentUserId();
+        LocalDate today = LocalDate.now();
+
+        long overdueCount = actionItemRepository.countOverdueAssigned(
+                userId, ActionItemStatus.DONE, today);
+        long dueSoonUnreadCount = actionItemRepository.countDueSoonUnread(
+                userId, ActionItemStatus.DONE, today, dueSoonLimit(today), DUE_SOON_DEDUP_PREFIX);
+        long storedUnreadCount = notificationRepository.countByUserIdAndReadAtIsNull(userId);
+
+        return overdueCount + dueSoonUnreadCount + storedUnreadCount;
     }
 
     @Transactional
@@ -94,7 +106,7 @@ public class NotificationService {
     }
 
     private List<NotificationResDto> buildVirtualNotifications(Long userId, LocalDate today) {
-        return actionItemRepository.findAllByAssigneeIdAndStatusNotAndDueDateIsNotNull(userId, ActionItemStatus.DONE)
+        return actionItemRepository.findAllAssignedWithDueDate(userId, ActionItemStatus.DONE)
                 .stream()
                 .sorted(Comparator.comparing(ActionItem::getDueDate))
                 .flatMap(item -> classify(item.getDueDate(), today)
@@ -131,19 +143,34 @@ public class NotificationService {
         }
     }
 
-    /** dueDate가 오늘보다 이르면 OVERDUE, 오늘부터 7일 이내(양끝 포함)면 DUE_SOON, 그 외엔 해당 없음. */
+    /**
+     * dueDate가 오늘보다 이르면 OVERDUE, 오늘부터 {@value #DUE_SOON_WINDOW_DAYS}일 이내(양끝 포함)면
+     * DUE_SOON, 그 외엔 해당 없음. isOverdue/isDueSoon/dueSoonLimit()은 getUnreadCount()의 COUNT
+     * 쿼리 파라미터로도 그대로 쓰여 두 로직의 기준이 어긋나지 않게 한다.
+     */
     private Optional<NotificationType> classify(LocalDate dueDate, LocalDate today) {
         if (dueDate == null) {
             return Optional.empty();
         }
-        if (dueDate.isBefore(today)) {
+        if (isOverdue(dueDate, today)) {
             return Optional.of(NotificationType.OVERDUE);
         }
-        long daysUntilDue = ChronoUnit.DAYS.between(today, dueDate);
-        if (daysUntilDue <= DUE_SOON_WINDOW_DAYS) {
+        if (isDueSoon(dueDate, today)) {
             return Optional.of(NotificationType.DUE_SOON);
         }
         return Optional.empty();
+    }
+
+    private boolean isOverdue(LocalDate dueDate, LocalDate today) {
+        return dueDate.isBefore(today);
+    }
+
+    private boolean isDueSoon(LocalDate dueDate, LocalDate today) {
+        return !dueDate.isBefore(today) && !dueDate.isAfter(dueSoonLimit(today));
+    }
+
+    private LocalDate dueSoonLimit(LocalDate today) {
+        return today.plusDays(DUE_SOON_WINDOW_DAYS);
     }
 
     private NotificationResDto toVirtualDto(ActionItem item, NotificationType type, Long userId, LocalDate today) {
@@ -184,7 +211,8 @@ public class NotificationService {
     }
 
     private void requireAssignee(ActionItem item, Long userId) {
-        if (item.getAssignee() == null || !item.getAssignee().getId().equals(userId)) {
+        boolean isAssignee = item.getAssignees().stream().anyMatch(u -> u.getId().equals(userId));
+        if (!isAssignee) {
             throw new BusinessException(ErrorCode.NOTIFICATION_ACCESS_DENIED);
         }
     }

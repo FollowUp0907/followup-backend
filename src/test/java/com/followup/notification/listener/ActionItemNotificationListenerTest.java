@@ -32,6 +32,7 @@ import com.followup.user.repository.UserRepository;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -98,6 +99,7 @@ class ActionItemNotificationListenerTest {
     private Long projectId;
 
     private final List<Long> actionItemIds = new ArrayList<>();
+    private final List<Long> extraMemberIds = new ArrayList<>();
     private Long meetingId;
 
     @BeforeEach
@@ -119,6 +121,7 @@ class ActionItemNotificationListenerTest {
         projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(emailOf(c)));
 
         actionItemIds.clear();
+        extraMemberIds.clear();
         meetingId = null;
     }
 
@@ -140,6 +143,7 @@ class ActionItemNotificationListenerTest {
             userRepository.deleteById(memberCId);
             userRepository.deleteById(memberBId);
             userRepository.deleteById(ownerId);
+            extraMemberIds.forEach(userRepository::deleteById);
         });
     }
 
@@ -160,10 +164,29 @@ class ActionItemNotificationListenerTest {
     }
 
     private ActionItemDetailResDto createTask(Long assigneeId) {
+        List<Long> assigneeUserIds = assigneeId != null ? List.of(assigneeId) : null;
         ActionItemDetailResDto item = actionItemService.createActionItem(projectId,
-                new ActionItemCreateReqDto("Task", null, assigneeId, null, Priority.MEDIUM));
+                new ActionItemCreateReqDto("Task", null, assigneeUserIds, null, Priority.MEDIUM));
         actionItemIds.add(item.id());
         return item;
+    }
+
+    private ActionItemDetailResDto createTaskWithAssignees(List<Long> assigneeUserIds) {
+        ActionItemDetailResDto item = actionItemService.createActionItem(projectId,
+                new ActionItemCreateReqDto("Task", null, assigneeUserIds, null, Priority.MEDIUM));
+        actionItemIds.add(item.id());
+        return item;
+    }
+
+    /** 테스트별로 필요할 때만 만드는 추가 멤버 — cleanUp()에서 함께 정리한다. */
+    private Long addExtraMember(String label) {
+        String suffix = UUID.randomUUID().toString();
+        Long userId = userRepository.save(User.builder()
+                .email(label + "-" + suffix + "@test.com").password("pw").name(label).build()).getId();
+        actingAs(ownerId);
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(emailOf(userId)));
+        extraMemberIds.add(userId);
+        return userId;
     }
 
     private Long createMeetingWithParticipants(List<Long> participantIds) {
@@ -178,12 +201,15 @@ class ActionItemNotificationListenerTest {
         ActionItem item = actionItemRepository.save(ActionItem.builder()
                 .project(projectRepository.getReferenceById(projectId))
                 .originMeeting(meetingRepository.getReferenceById(originMeetingId))
-                .assignee(assigneeId != null ? userRepository.getReferenceById(assigneeId) : null)
                 .createdBy(creatorId != null ? userRepository.getReferenceById(creatorId) : null)
                 .title("From meeting")
                 .status(ActionItemStatus.TODO)
                 .priority(Priority.MEDIUM)
                 .build());
+        if (assigneeId != null) {
+            item.replaceAssignees(Set.of(userRepository.getReferenceById(assigneeId)));
+            actionItemRepository.save(item);
+        }
         actionItemIds.add(item.getId());
         return item;
     }
@@ -213,7 +239,7 @@ class ActionItemNotificationListenerTest {
         ActionItemDetailResDto item = createTask(memberBId);
 
         actionItemService.updateActionItem(item.id(),
-                new ActionItemUpdateReqDto(null, null, memberCId, null, null, null));
+                new ActionItemUpdateReqDto(null, null, List.of(memberCId), null, null, null));
 
         assertThat(countByType(memberCId, NotificationType.TASK_CREATED)).isEqualTo(1);
     }
@@ -296,5 +322,63 @@ class ActionItemNotificationListenerTest {
         assertThat(countByType(memberBId, NotificationType.TASK_COMPLETED)).isEqualTo(1);
         assertThat(countByType(ownerId, NotificationType.TASK_COMPLETED)).isEqualTo(1);
         assertThat(notificationsFor(memberCId)).isEmpty();
+    }
+
+    // ---- 담당자 여러 명(assignees) ----
+
+    @Test
+    void taskCreated_withMultipleAssignees_eachGetsOneNotification() {
+        actingAs(ownerId);
+        createTaskWithAssignees(List.of(memberBId, memberCId));
+
+        assertThat(countByType(memberBId, NotificationType.TASK_CREATED)).isEqualTo(1);
+        assertThat(countByType(memberCId, NotificationType.TASK_CREATED)).isEqualTo(1);
+    }
+
+    @Test
+    void updateAssignees_addingNewOne_onlyNewOneNotified() {
+        actingAs(ownerId);
+        Long memberDId = addExtraMember("D");
+        ActionItemDetailResDto item = createTaskWithAssignees(List.of(memberBId, memberCId));
+
+        actingAs(ownerId);
+        actionItemService.updateActionItem(item.id(),
+                new ActionItemUpdateReqDto(null, null, List.of(memberBId, memberCId, memberDId), null, null, null));
+
+        // 기존 담당자(B, C)는 생성 시 이미 1건씩 받았고, 추가로 더 받지 않는다. 새로 추가된 D만 1건.
+        assertThat(countByType(memberBId, NotificationType.TASK_CREATED)).isEqualTo(1);
+        assertThat(countByType(memberCId, NotificationType.TASK_CREATED)).isEqualTo(1);
+        assertThat(countByType(memberDId, NotificationType.TASK_CREATED)).isEqualTo(1);
+    }
+
+    @Test
+    void taskUpdated_withMultipleAssignees_notifiesAllExceptActor() {
+        actingAs(ownerId);
+        Long memberDId = addExtraMember("D");
+        ActionItemDetailResDto item = createTaskWithAssignees(List.of(memberBId, memberCId, memberDId));
+
+        // memberC는 담당자이면서 이번 수정의 actor다 — 본인은 알림에서 제외되어야 한다.
+        actingAs(memberCId);
+        actionItemService.updateActionItem(item.id(),
+                new ActionItemUpdateReqDto("New title", null, null, null, null, null));
+
+        assertThat(countByType(memberBId, NotificationType.TASK_UPDATED)).isEqualTo(1);
+        assertThat(countByType(memberDId, NotificationType.TASK_UPDATED)).isEqualTo(1);
+        assertThat(countByType(memberCId, NotificationType.TASK_UPDATED)).isZero();
+    }
+
+    @Test
+    void taskCompleted_withMultipleAssignees_notifiesAssigneesAndCreatorOnceEach() {
+        actingAs(ownerId);
+        // ownerId는 생성자이자 담당자로도 겹친다 — 중복 인원이 1건으로 합쳐지는지 함께 검증한다.
+        ActionItemDetailResDto item = createTaskWithAssignees(List.of(memberBId, memberCId, ownerId));
+
+        actingAs(memberBId);
+        actionItemService.updateActionItem(item.id(),
+                new ActionItemUpdateReqDto(null, null, null, null, ActionItemStatus.DONE, null));
+
+        assertThat(countByType(memberBId, NotificationType.TASK_COMPLETED)).isEqualTo(1);
+        assertThat(countByType(memberCId, NotificationType.TASK_COMPLETED)).isEqualTo(1);
+        assertThat(countByType(ownerId, NotificationType.TASK_COMPLETED)).isEqualTo(1);
     }
 }

@@ -116,6 +116,9 @@ public class ProjectService {
         meetingActionLinkRepository.deleteAllByMeetingIdIn(meetingIds);
         meetingParticipantRepository.deleteAllByMeetingIdIn(meetingIds);
         notificationRepository.deleteAllByActionItemIdIn(actionItemIds);
+        if (!actionItemIds.isEmpty()) {
+            actionItemRepository.deleteAllAssigneesByActionItemIdIn(actionItemIds);
+        }
         actionItemRepository.deleteAllByProjectId(projectId);
         decisionRepository.deleteAllByMeetingIdIn(meetingIds);
         aiAnalysisRunRepository.deleteAllByMeetingIdIn(meetingIds);

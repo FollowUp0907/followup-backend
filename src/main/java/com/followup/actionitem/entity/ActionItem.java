@@ -14,12 +14,16 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -28,8 +32,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "action_items", indexes = {
         @Index(name = "idx_action_items_project_status", columnList = "project_id, status"),
-        @Index(name = "idx_action_items_project_due_date", columnList = "project_id, due_date"),
-        @Index(name = "idx_action_items_assignee_status", columnList = "assignee_user_id, status")
+        @Index(name = "idx_action_items_project_due_date", columnList = "project_id, due_date")
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -47,9 +50,14 @@ public class ActionItem {
     @JoinColumn(name = "origin_meeting_id")
     private Meeting originMeeting;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assignee_user_id")
-    private User assignee;
+    /** 담당자(여러 명 가능). AI 분석 확정 시엔 추천된 한 명만 담기고, 그 외엔 수동으로 여러 명을 지정할 수 있다. */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "action_item_assignees",
+            joinColumns = @JoinColumn(name = "action_item_id"),
+            inverseJoinColumns = @JoinColumn(name = "user_id")
+    )
+    private Set<User> assignees = new LinkedHashSet<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "source_analysis_id")
@@ -89,12 +97,11 @@ public class ActionItem {
     private LocalDateTime updatedAt;
 
     @Builder
-    public ActionItem(Project project, Meeting originMeeting, User assignee, AiAnalysisRun sourceAnalysis,
+    public ActionItem(Project project, Meeting originMeeting, AiAnalysisRun sourceAnalysis,
                        User createdBy, String title, String description, LocalDate dueDate, ActionItemStatus status,
                        Priority priority, String priorityReason, LocalDateTime completedAt) {
         this.project = project;
         this.originMeeting = originMeeting;
-        this.assignee = assignee;
         this.sourceAnalysis = sourceAnalysis;
         this.createdBy = createdBy;
         this.title = title;
@@ -106,12 +113,15 @@ public class ActionItem {
         this.completedAt = completedAt;
     }
 
-    public void unassign() {
-        this.assignee = null;
+    /** 전체 교체 방식 — 어떤 사람이 새로 추가/제거됐는지는 호출 측(서비스)에서 미리 diff해 알림에 쓴다. */
+    public void replaceAssignees(Set<User> newAssignees) {
+        this.assignees.clear();
+        this.assignees.addAll(newAssignees);
     }
 
-    public void assignTo(User user) {
-        this.assignee = user;
+    /** 프로젝트 멤버 제거 시, 그 사람만 담당자 목록에서 뺀다. */
+    public void removeAssignee(Long userId) {
+        this.assignees.removeIf(user -> user.getId().equals(userId));
     }
 
     public void detachOriginMeeting() {

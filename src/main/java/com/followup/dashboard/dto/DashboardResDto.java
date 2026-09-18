@@ -30,8 +30,8 @@ public record DashboardResDto(
             ActionItemStatus status,
             Priority priority,
             LocalDate dueDate,
-            Long assigneeUserId,
-            String assigneeName
+            List<Long> assigneeUserIds,
+            List<String> assigneeNames
     ) {
     }
 

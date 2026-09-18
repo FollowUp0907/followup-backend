@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import com.followup.actionitem.dto.ActionItemAssigneeResDto;
 import com.followup.actionitem.dto.ActionItemCreateReqDto;
 import com.followup.actionitem.dto.ActionItemDetailResDto;
 import com.followup.actionitem.dto.ActionItemListResDto;
@@ -101,8 +102,9 @@ class ActionItemServiceTest {
     }
 
     private ActionItemDetailResDto create(Long projectId, String title, Long assigneeUserId, Priority priority) {
+        List<Long> assigneeUserIds = assigneeUserId != null ? List.of(assigneeUserId) : null;
         return actionItemService.createActionItem(projectId,
-                new ActionItemCreateReqDto(title, null, assigneeUserId, null, priority));
+                new ActionItemCreateReqDto(title, null, assigneeUserIds, null, priority));
     }
 
     @Test
@@ -195,7 +197,21 @@ class ActionItemServiceTest {
         List<ActionItemListResDto> result = actionItemService.getActionItems(projectId, null, memberId, null);
 
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).assigneeUserId()).isEqualTo(memberId);
+        assertThat(result.get(0).assignees()).extracting(ActionItemAssigneeResDto::userId).containsExactly(memberId);
+    }
+
+    @Test
+    void getActionItems_filterByAssignee_includesAnyOfMultipleAssignees() {
+        Long projectId = createProjectAsOwner();
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
+        actionItemService.createActionItem(projectId,
+                new ActionItemCreateReqDto("Multi-assigned", null, List.of(ownerId, memberId), null, null));
+        create(projectId, "Unrelated", null, null);
+
+        List<ActionItemListResDto> result = actionItemService.getActionItems(projectId, null, memberId, null);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).title()).isEqualTo("Multi-assigned");
     }
 
     @Test

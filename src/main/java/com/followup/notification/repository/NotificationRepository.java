@@ -17,6 +17,9 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     List<Notification> findAllByUserIdAndReadAtIsNullAndRemindAtLessThanEqual(Long userId, LocalDateTime now);
 
+    /** unread-count의 "저장된 알림" 집계 — getNotifications()에서 readAt==null로 안 읽음을 판단하는 것과 동일한 조건이다. */
+    long countByUserIdAndReadAtIsNull(Long userId);
+
     void deleteByActionItemId(Long actionItemId);
 
     void deleteAllByActionItemIdIn(List<Long> actionItemIds);

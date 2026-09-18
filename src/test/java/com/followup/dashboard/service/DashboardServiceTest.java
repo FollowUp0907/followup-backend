@@ -29,6 +29,7 @@ import com.followup.user.repository.UserRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -99,14 +100,17 @@ class DashboardServiceTest {
     }
 
     private ActionItem createActionItem(Long projectId, ActionItemStatus status, LocalDate dueDate, Long assigneeUserId) {
-        return actionItemRepository.save(ActionItem.builder()
+        ActionItem actionItem = actionItemRepository.save(ActionItem.builder()
                 .project(projectRepository.getReferenceById(projectId))
-                .assignee(assigneeUserId != null ? userRepository.getReferenceById(assigneeUserId) : null)
                 .title("Task")
                 .status(status)
                 .priority(Priority.MEDIUM)
                 .dueDate(dueDate)
                 .build());
+        if (assigneeUserId != null) {
+            actionItem.replaceAssignees(Set.of(userRepository.getReferenceById(assigneeUserId)));
+        }
+        return actionItem;
     }
 
     private Meeting createMeeting(Long projectId, LocalDateTime scheduledAt) {
@@ -274,6 +278,35 @@ class DashboardServiceTest {
         assertThat(memberProgress.totalCount()).isZero();
         assertThat(memberProgress.doneCount()).isZero();
         assertThat(memberProgress.completionRate()).isEqualTo(0.0);
+    }
+
+    /**
+     * 담당자 여러 명이 걸린 업무도 각자의 진행률에 포함되어야 하고, assignees fetch join으로 인한
+     * 행 늘어남 때문에 summary total이나 진행률이 중복 집계되면 안 된다.
+     */
+    @Test
+    void getDashboard_memberProgressIncludesMultiAssigneeTaskWithoutDoubleCounting() {
+        Long projectId = createProjectAsOwner();
+        addExistingMember(projectId);
+        ActionItem sharedTask = createActionItem(projectId, ActionItemStatus.TODO, null, ownerId);
+        sharedTask.replaceAssignees(Set.of(
+                userRepository.getReferenceById(ownerId),
+                userRepository.getReferenceById(memberId)));
+        actionItemRepository.save(sharedTask);
+
+        actingAs(ownerId);
+        DashboardResDto response = dashboardService.getDashboard(projectId);
+
+        assertThat(response.actionItemSummary().total()).isEqualTo(1);
+
+        List<MemberProgress> progress = response.memberProgress();
+        MemberProgress ownerProgress = progress.stream()
+                .filter(p -> p.userId().equals(ownerId)).findFirst().orElseThrow();
+        assertThat(ownerProgress.totalCount()).isEqualTo(1);
+
+        MemberProgress memberProgress = progress.stream()
+                .filter(p -> p.userId().equals(memberId)).findFirst().orElseThrow();
+        assertThat(memberProgress.totalCount()).isEqualTo(1);
     }
 
     @Test

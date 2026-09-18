@@ -35,26 +35,30 @@ public class ActionItemNotificationListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onTaskAssigned(TaskAssignedEvent event) {
-        ActionItem item = event.item();
-        notify(item, item.getAssignee().getId(), NotificationType.TASK_CREATED);
+        notify(event.item(), event.targetUserId(), NotificationType.TASK_CREATED);
     }
 
+    /** 담당자 전원(actor 제외, 중복 인원은 1건으로)에게 알린다. */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onTaskUpdated(TaskUpdatedEvent event) {
         ActionItem item = event.item();
-        notify(item, item.getAssignee().getId(), NotificationType.TASK_UPDATED);
+        Set<Long> recipientIds = new LinkedHashSet<>();
+        item.getAssignees().forEach(user -> recipientIds.add(user.getId()));
+        recipientIds.remove(event.actorId());
+
+        recipientIds.forEach(userId -> notify(item, userId, NotificationType.TASK_UPDATED));
     }
 
-    /** 담당자/생성자/origin 회의 참여자 전원에게 알린다(actor 포함, 중복 인원은 1건으로 합쳐진다). */
+    /**
+     * 담당자 전원/생성자/origin 회의 참여자에게 알린다(actor 포함, 중복 인원은 1건으로 합쳐진다).
+     */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onTaskCompleted(TaskCompletedEvent event) {
         ActionItem item = event.item();
         Set<Long> recipientIds = new LinkedHashSet<>();
-        if (item.getAssignee() != null) {
-            recipientIds.add(item.getAssignee().getId());
-        }
+        item.getAssignees().forEach(user -> recipientIds.add(user.getId()));
         if (item.getCreatedBy() != null) {
             recipientIds.add(item.getCreatedBy().getId());
         }

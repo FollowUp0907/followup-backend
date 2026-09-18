@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.followup.actionitem.entity.ActionItemStatus;
 import com.followup.actionitem.entity.Priority;
 import com.followup.actionitem.entity.ActionItem;
+import com.followup.actionitem.event.TaskAssignedEvent;
 import com.followup.actionitem.repository.ActionItemRepository;
 import com.followup.ai.client.AiAnalysisClient;
 import com.followup.ai.dto.AiDraftResultDto;
@@ -56,9 +57,12 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
+@RecordApplicationEvents
 @Transactional
 class AiAnalysisServiceTest {
 
@@ -152,10 +156,11 @@ class AiAnalysisServiceTest {
     }
 
     private AnalysisConfirmReqDto confirmRequest(Long assigneeUserId, Priority priority) {
+        List<Long> assigneeUserIds = assigneeUserId != null ? List.of(assigneeUserId) : null;
         return new AnalysisConfirmReqDto(
                 List.of(new DecisionConfirmItem("다음 스프린트에서 알림 기능을 우선 개발한다.")),
                 List.of(new ActionItemConfirmItem("알림 API 설계", "알림 생성 및 조회 API 설계",
-                        assigneeUserId, LocalDate.of(2026, 9, 15), priority, "다음 스프린트 핵심 기능"))
+                        assigneeUserIds, LocalDate.of(2026, 9, 15), priority, "다음 스프린트 핵심 기능"))
         );
     }
 
@@ -536,7 +541,7 @@ class AiAnalysisServiceTest {
         aiAnalysisService.confirmAnalysis(generated.id(), confirmRequest(null, Priority.HIGH));
 
         ActionItem created = actionItemRepository.search(projectId, null, null, null).get(0);
-        assertThat(created.getAssignee()).isNull();
+        assertThat(created.getAssignees()).isEmpty();
     }
 
     @Test
@@ -550,7 +555,51 @@ class AiAnalysisServiceTest {
         aiAnalysisService.confirmAnalysis(generated.id(), confirmRequest(memberId, Priority.HIGH));
 
         ActionItem created = actionItemRepository.search(projectId, null, memberId, null).get(0);
-        assertThat(created.getAssignee().getId()).isEqualTo(memberId);
+        assertThat(created.getAssignees()).extracting(User::getId).containsExactly(memberId);
+    }
+
+    @Test
+    void confirmAnalysis_multipleAssignees_allReflectedAndEachNotifiedExceptActor(ApplicationEvents events) {
+        Long projectId = createProjectAsOwner();
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
+        Long meetingId = createMeetingWithContent(projectId, "Some content");
+        AnalysisResDto generated = generateAnalysis(meetingId);
+
+        actingAs(ownerId);
+        AnalysisConfirmReqDto request = new AnalysisConfirmReqDto(
+                List.of(),
+                List.of(new ActionItemConfirmItem("Multi assignee task", null,
+                        List.of(ownerId, memberId), LocalDate.of(2026, 9, 15), Priority.HIGH, null)));
+        aiAnalysisService.confirmAnalysis(generated.id(), request);
+
+        ActionItem created = actionItemRepository.search(projectId, null, null, null).get(0);
+        assertThat(created.getAssignees()).extracting(User::getId)
+                .containsExactlyInAnyOrder(ownerId, memberId);
+
+        // actor(ownerId)는 본인이라 알림 대상에서 빠지고, memberId에게만 TaskAssignedEvent가 발행된다.
+        // AFTER_COMMIT 리스너는 이 테스트의 롤백 트랜잭션 안에서는 실제로 커밋되지 않아 실행되지 않으므로,
+        // 발행된 이벤트 자체를 ApplicationEvents로 캡처해 검증한다.
+        List<Long> notifiedUserIds = events.stream(TaskAssignedEvent.class)
+                .map(TaskAssignedEvent::targetUserId)
+                .toList();
+        assertThat(notifiedUserIds).containsExactly(memberId);
+    }
+
+    @Test
+    void confirmAnalysis_emptyAssigneeList_createsWithNoAssignees() {
+        Long projectId = createProjectAsOwner();
+        Long meetingId = createMeetingWithContent(projectId, "Some content");
+        AnalysisResDto generated = generateAnalysis(meetingId);
+
+        actingAs(ownerId);
+        AnalysisConfirmReqDto request = new AnalysisConfirmReqDto(
+                List.of(),
+                List.of(new ActionItemConfirmItem("No assignee task", null,
+                        List.of(), LocalDate.of(2026, 9, 15), Priority.HIGH, null)));
+        aiAnalysisService.confirmAnalysis(generated.id(), request);
+
+        ActionItem created = actionItemRepository.search(projectId, null, null, null).get(0);
+        assertThat(created.getAssignees()).isEmpty();
     }
 
     @Test
@@ -621,7 +670,7 @@ class AiAnalysisServiceTest {
         AnalysisConfirmReqDto request = new AnalysisConfirmReqDto(
                 List.of(new DecisionConfirmItem("This decision should not survive")),
                 List.of(new ActionItemConfirmItem("Invalid assignee item", null,
-                        outsiderId, null, Priority.HIGH, null)));
+                        List.of(outsiderId), null, Priority.HIGH, null)));
 
         actingAs(ownerId);
         assertThatThrownBy(() -> aiAnalysisService.confirmAnalysis(generated.id(), request))

@@ -19,10 +19,12 @@ import com.followup.project.repository.ProjectMemberRepository;
 import com.followup.project.repository.ProjectRepository;
 import com.followup.user.entity.User;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,7 +55,7 @@ public class DashboardService {
         getProjectOrThrow(projectId);
         requireMember(projectId, currentUserProvider.getCurrentUserId());
 
-        List<ActionItem> actionItems = actionItemRepository.findAllByProjectIdFetchAssignee(projectId);
+        List<ActionItem> actionItems = actionItemRepository.findAllByProjectIdFetchAssignees(projectId);
         LocalDate today = LocalDate.now();
 
         ActionItemSummary summary = buildSummary(actionItems, today);
@@ -101,21 +103,24 @@ public class DashboardService {
     }
 
     /**
-     * 프로젝트 전체 멤버를 기준으로 업무 진행률을 집계한다.
-     * 담당 업무가 없는 멤버도 0건으로 포함하며, 미배정 업무는 제외한다.
+     * 프로젝트 전체 멤버를 기준으로 업무 진행률을 집계한다. 담당 업무가 없는 멤버도 0건으로 포함하며,
+     * 미배정 업무는 제외한다.
      */
     private List<MemberProgress> buildMemberProgress(Long projectId, List<ActionItem> actionItems) {
-        Map<Long, List<ActionItem>> byAssignee = actionItems.stream()
-                .filter(item -> item.getAssignee() != null)
-                .collect(Collectors.groupingBy(item -> item.getAssignee().getId()));
+        Map<Long, List<ActionItem>> byMember = new HashMap<>();
+        for (ActionItem item : actionItems) {
+            for (User assignee : item.getAssignees()) {
+                byMember.computeIfAbsent(assignee.getId(), id -> new ArrayList<>()).add(item);
+            }
+        }
 
         List<ProjectMember> members = projectMemberRepository.findAllByProjectId(projectId);
         return members.stream()
-                .map(member -> toMemberProgress(member, byAssignee.getOrDefault(member.getUser().getId(), List.of())))
+                .map(member -> toMemberProgress(member, byMember.getOrDefault(member.getUser().getId(), List.of())))
                 .toList();
     }
 
-    private static MemberProgress toMemberProgress(ProjectMember member, List<ActionItem> assigned) {
+    private static MemberProgress toMemberProgress(ProjectMember member, Collection<ActionItem> assigned) {
         User user = member.getUser();
         long total = assigned.size();
         long done = assigned.stream().filter(item -> item.getStatus() == ActionItemStatus.DONE).count();
@@ -124,15 +129,17 @@ public class DashboardService {
     }
 
     private static DueSoonActionItem toDueSoonActionItem(ActionItem item) {
-        User assignee = item.getAssignee();
+        List<User> assignees = item.getAssignees().stream()
+                .sorted(Comparator.comparing(User::getId))
+                .toList();
         return new DueSoonActionItem(
                 item.getId(),
                 item.getTitle(),
                 item.getStatus(),
                 item.getPriority(),
                 item.getDueDate(),
-                assignee != null ? assignee.getId() : null,
-                assignee != null ? assignee.getName() : null
+                assignees.stream().map(User::getId).toList(),
+                assignees.stream().map(User::getName).toList()
         );
     }
 

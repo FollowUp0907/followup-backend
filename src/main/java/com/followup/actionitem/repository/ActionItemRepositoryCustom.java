@@ -12,8 +12,8 @@ public interface ActionItemRepositoryCustom {
     List<ActionItem> findActiveByProjectId(Long projectId, Long assigneeId, Priority priority);
 
     /**
-     * Dashboard 집계 시 assignee 접근으로 인한 N+1을 방지하기 위해
-     * ActionItem과 assignee를 fetch join으로 함께 조회한다.
+     * Dashboard 집계 시 assignees 접근으로 인한 N+1을 방지하기 위해
+     * ActionItem과 assignees를 fetch join으로 함께 조회한다.
      */
-    List<ActionItem> findAllByProjectIdFetchAssignee(Long projectId);
+    List<ActionItem> findAllByProjectIdFetchAssignees(Long projectId);
 }
