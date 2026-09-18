@@ -28,6 +28,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
+    /** EventSource는 커스텀 헤더를 실을 수 없어, 이 경로만 예외적으로 쿼리 파라미터 토큰을 허용한다. */
+    private static final String SSE_STREAM_PATH = "/api/notifications/stream";
+    private static final String TOKEN_PARAM = "token";
 
     private final JwtProvider jwtProvider;
 
@@ -51,6 +54,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String header = request.getHeader(AUTHORIZATION_HEADER);
         if (header != null && header.startsWith(BEARER_PREFIX)) {
             return header.substring(BEARER_PREFIX.length());
+        }
+        if (header == null && SSE_STREAM_PATH.equals(request.getRequestURI())) {
+            return request.getParameter(TOKEN_PARAM);
         }
         return null;
     }

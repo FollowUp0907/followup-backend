@@ -2,7 +2,9 @@ package com.followup.global.security;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.followup.auth.dto.LoginReqDto;
@@ -86,6 +88,34 @@ class SecurityIntegrationTest {
         mockMvc.perform(get("/api/projects").header("Authorization", "Bearer " + expiredToken))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("EXPIRED_TOKEN"));
+    }
+
+    /** EventSource는 커스텀 헤더를 못 실으므로 이 경로만 쿼리 파라미터 토큰도 허용한다 — 둘 다 없으면 여전히 401이다. */
+    @Test
+    void sseStream_withoutTokenAtAll_returns401() throws Exception {
+        mockMvc.perform(get("/api/notifications/stream"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void sseStream_withValidQueryToken_returnsEventStream() throws Exception {
+        String email = uniqueEmail();
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new SignupReqDto(email, "password123", "Tester"))))
+                .andExpect(status().isCreated());
+        String loginResponseBody = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginReqDto(email, "password123"))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        TokenResDto token = objectMapper.readValue(loginResponseBody, TokenResDto.class);
+
+        mockMvc.perform(get("/api/notifications/stream").param("token", token.accessToken()))
+                .andExpect(request().asyncStarted())
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.TEXT_EVENT_STREAM_VALUE));
     }
 
     @Test
