@@ -1,6 +1,10 @@
 package com.followup.notification.listener;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.followup.actionitem.dto.ActionItemCreateReqDto;
@@ -33,8 +37,12 @@ import com.followup.project.repository.ProjectMemberRepository;
 import com.followup.project.repository.ProjectRepository;
 import com.followup.project.service.ProjectMemberService;
 import com.followup.project.service.ProjectService;
+import com.followup.push.client.FcmClient;
+import com.followup.push.entity.PushSubscription;
+import com.followup.push.repository.PushSubscriptionRepository;
 import com.followup.user.entity.User;
 import com.followup.user.repository.UserRepository;
+import com.google.firebase.messaging.BatchResponse;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -102,10 +110,16 @@ class ActionItemNotificationListenerTest {
     private InvitationTokenGenerator invitationTokenGenerator;
 
     @Autowired
+    private PushSubscriptionRepository pushSubscriptionRepository;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     @MockitoBean
     private CurrentUserProvider currentUserProvider;
+
+    @MockitoBean
+    private FcmClient fcmClient;
 
     /** A: 프로젝트 오너 겸 기본 생성자, B/C: 멤버. */
     private Long ownerId;
@@ -158,9 +172,13 @@ class ActionItemNotificationListenerTest {
             projectInvitationRepository.deleteAllByProjectId(projectId);
             projectMemberRepository.deleteAllByProjectId(projectId);
             projectRepository.deleteById(projectId);
+            pushSubscriptionRepository.deleteAllByUserId(memberCId);
+            pushSubscriptionRepository.deleteAllByUserId(memberBId);
+            pushSubscriptionRepository.deleteAllByUserId(ownerId);
             userRepository.deleteById(memberCId);
             userRepository.deleteById(memberBId);
             userRepository.deleteById(ownerId);
+            extraMemberIds.forEach(pushSubscriptionRepository::deleteAllByUserId);
             extraMemberIds.forEach(userRepository::deleteById);
         });
     }
@@ -450,5 +468,29 @@ class ActionItemNotificationListenerTest {
 
         assertThat(notificationsFor(ownerId)).isEmpty();
         assertThat(countByType(memberCId, NotificationType.MEMBER_JOINED)).isZero();
+    }
+
+    // ---- 웹 푸시(FCM) ----
+
+    @Test
+    void taskCreated_recipientHasPushSubscription_sendsPush() throws Exception {
+        when(fcmClient.sendEachForMulticast(any())).thenReturn(mock(BatchResponse.class));
+        pushSubscriptionRepository.save(PushSubscription.builder()
+                .user(userRepository.getReferenceById(memberBId))
+                .token("fcm-token-" + UUID.randomUUID())
+                .build());
+
+        actingAs(ownerId);
+        createTask(memberBId);
+
+        verify(fcmClient).sendEachForMulticast(any());
+    }
+
+    @Test
+    void taskCreated_recipientHasNoPushSubscription_doesNotCallFcm() throws Exception {
+        actingAs(ownerId);
+        createTask(memberBId);
+
+        verify(fcmClient, never()).sendEachForMulticast(any());
     }
 }

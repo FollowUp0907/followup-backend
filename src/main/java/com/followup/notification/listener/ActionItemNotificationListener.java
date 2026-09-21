@@ -13,6 +13,7 @@ import com.followup.notification.sse.SseEmitterRegistry;
 import com.followup.project.entity.Project;
 import com.followup.project.event.MemberJoinedEvent;
 import com.followup.project.repository.ProjectMemberRepository;
+import com.followup.push.service.PushNotificationSender;
 import com.followup.user.repository.UserRepository;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
@@ -38,6 +39,7 @@ public class ActionItemNotificationListener {
     private final ProjectMemberRepository projectMemberRepository;
     private final UserRepository userRepository;
     private final SseEmitterRegistry sseEmitterRegistry;
+    private final PushNotificationSender pushNotificationSender;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -98,7 +100,10 @@ public class ActionItemNotificationListener {
         notify(project, null, userId, taskTitle, type);
     }
 
-    /** 저장 직후 SSE로도 밀어 보낸다 — 폴링은 그대로 유지되고 SSE는 추가되는 실시간 채널이다. */
+    /**
+     * 저장 직후 SSE로도 밀어 보내고, 앱이 완전히 닫혀 있을 때를 위해 웹 푸시도 추가로 보낸다 — 폴링/SSE는
+     * 그대로 유지되고 푸시는 그 위에 얹는 추가 채널이다.
+     */
     private void notify(Project project, ActionItem actionItem, Long userId, String taskTitle, NotificationType type) {
         Notification notification = notificationRepository.save(Notification.builder()
                 .user(userRepository.getReferenceById(userId))
@@ -109,5 +114,6 @@ public class ActionItemNotificationListener {
                 .type(type)
                 .build());
         sseEmitterRegistry.sendToUser(userId, "notification", NotificationResDto.of(notification));
+        pushNotificationSender.send(notification);
     }
 }
