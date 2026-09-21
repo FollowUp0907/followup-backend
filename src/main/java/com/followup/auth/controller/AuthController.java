@@ -1,5 +1,6 @@
 package com.followup.auth.controller;
 
+import com.followup.auth.dto.GoogleLoginReqDto;
 import com.followup.auth.dto.LoginReqDto;
 import com.followup.auth.dto.SignupReqDto;
 import com.followup.auth.dto.SignupResDto;
@@ -42,5 +43,14 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<TokenResDto> login(@Valid @RequestBody LoginReqDto request) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    @Operation(summary = "구글 로그인")
+    @ApiResponse(responseCode = "200", description = "로그인 성공")
+    @ApiResponse(responseCode = "401", description = "유효하지 않은 구글 토큰 또는 이메일 미인증")
+    @SecurityRequirements
+    @PostMapping("/google")
+    public ResponseEntity<TokenResDto> loginWithGoogle(@Valid @RequestBody GoogleLoginReqDto request) {
+        return ResponseEntity.ok(authService.loginWithGoogle(request.idToken()));
     }
 }

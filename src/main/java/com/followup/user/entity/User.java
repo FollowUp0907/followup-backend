@@ -17,7 +17,8 @@ import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "users", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_users_email", columnNames = "email")
+        @UniqueConstraint(name = "uk_users_email", columnNames = "email"),
+        @UniqueConstraint(name = "uk_users_google_id", columnNames = "google_id")
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -30,11 +31,15 @@ public class User {
     @Column(name = "email", nullable = false, length = 255)
     private String email;
 
-    @Column(name = "password", nullable = false, length = 255)
+    /** 구글로만 가입한 사용자는 비밀번호가 없다. */
+    @Column(name = "password", length = 255)
     private String password;
 
     @Column(name = "name", nullable = false, length = 100)
     private String name;
+
+    @Column(name = "google_id", length = 255)
+    private String googleId;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
@@ -43,10 +48,16 @@ public class User {
     private LocalDateTime updatedAt;
 
     @Builder
-    public User(String email, String password, String name) {
+    public User(String email, String password, String name, String googleId) {
         this.email = email;
         this.password = password;
         this.name = name;
+        this.googleId = googleId;
+    }
+
+    /** 비밀번호로 가입했던 기존 계정에 구글 계정을 연결한다 — 계정을 새로 만들지 않는다. */
+    public void linkGoogleAccount(String googleId) {
+        this.googleId = googleId;
     }
 
     @PrePersist

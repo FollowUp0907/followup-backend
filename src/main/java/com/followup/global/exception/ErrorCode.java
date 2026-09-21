@@ -28,6 +28,8 @@ public enum ErrorCode {
     INVALID_ANALYSIS_ASSIGNEE(HttpStatus.BAD_REQUEST, "Assignee must be a member of this project"),
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "Email already exists"),
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "Invalid email or password"),
+    INVALID_GOOGLE_TOKEN(HttpStatus.UNAUTHORIZED, "Invalid Google ID token"),
+    GOOGLE_EMAIL_NOT_VERIFIED(HttpStatus.UNAUTHORIZED, "Google email is not verified"),
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "Authentication required"),
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "Invalid token"),
     EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "Token has expired"),
