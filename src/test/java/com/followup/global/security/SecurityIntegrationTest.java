@@ -1,5 +1,6 @@
 package com.followup.global.security;
 
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -7,9 +8,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.followup.auth.dto.GoogleLoginReqDto;
 import com.followup.auth.dto.LoginReqDto;
 import com.followup.auth.dto.SignupReqDto;
 import com.followup.auth.dto.TokenResDto;
+import com.followup.auth.google.GoogleIdTokenVerifierComponent;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +20,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -31,6 +35,9 @@ class SecurityIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @MockitoSpyBean
+    private GoogleIdTokenVerifierComponent googleIdTokenVerifierComponent;
 
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -113,6 +120,22 @@ class SecurityIntegrationTest {
                 .andExpect(request().asyncStarted())
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.TEXT_EVENT_STREAM_VALUE));
+    }
+
+    /**
+     * permitAll이 안 걸려있으면 요청이 Spring Security 인증 단계에서 막혀 컨트롤러/GoogleIdTokenVerifierComponent까지
+     * 아예 도달하지 못한다. permitAll이 걸려 있으면 요청이 통과해 검증기까지 호출되고, 거기서 실패한 토큰이
+     * 애플리케이션 레벨 에러(INVALID_GOOGLE_TOKEN)로 응답됨을 확인한다 — 둘 다 401이지만 원인이 다르다.
+     */
+    @Test
+    void googleLogin_isPermitAll_reachesControllerAndFailsAtApplicationLevel() throws Exception {
+        mockMvc.perform(post("/api/auth/google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new GoogleLoginReqDto("not-a-real-google-id-token"))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_GOOGLE_TOKEN"));
+
+        verify(googleIdTokenVerifierComponent).verify("not-a-real-google-id-token");
     }
 
     @Test
