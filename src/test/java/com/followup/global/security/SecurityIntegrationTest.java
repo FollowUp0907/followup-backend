@@ -77,6 +77,52 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    void existingProtectedPath_withoutToken_returns401NotFallenBackTo404() throws Exception {
+        mockMvc.perform(get("/api/notifications"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    /** 인증 체크가 MVC 핸들러 매핑보다 먼저 실행되므로, 존재하지 않는 경로는 401이 아니라 404여야 한다. */
+    @Test
+    void unmappedPath_withoutToken_returns404WithRouteNotFound() throws Exception {
+        mockMvc.perform(get("/api/does-not-exist"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ROUTE_NOT_FOUND"));
+    }
+
+    /** 유효한 토큰이 있어도 매핑 자체가 없으면 여전히 404다 — 존재하지 않는 API라는 사실은 토큰과 무관하다. */
+    @Test
+    void unmappedPath_withValidToken_stillReturns404() throws Exception {
+        String email = uniqueEmail();
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new SignupReqDto(email, "password123", "Tester"))))
+                .andExpect(status().isCreated());
+        String loginResponseBody = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginReqDto(email, "password123"))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        TokenResDto token = objectMapper.readValue(loginResponseBody, TokenResDto.class);
+
+        mockMvc.perform(get("/api/does-not-exist").header("Authorization", "Bearer " + token.accessToken()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ROUTE_NOT_FOUND"));
+    }
+
+    /**
+     * 매핑이 실제로 존재하는 경로에 대한 토큰 오류(무효/만료)는, 매핑이 없는 경로와 절대 혼동돼선 안 된다 —
+     * 여전히 401 + 기존 토큰 에러 코드 그대로여야 한다.
+     */
+    @Test
+    void existingPath_withInvalidToken_returns401NotConfusedWith404() throws Exception {
+        mockMvc.perform(get("/api/projects").header("Authorization", "Bearer not-a-jwt"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_TOKEN"));
+    }
+
+    @Test
     void protectedApi_withMalformedToken_returns401WithInvalidToken() throws Exception {
         mockMvc.perform(get("/api/projects").header("Authorization", "Bearer not-a-jwt"))
                 .andExpect(status().isUnauthorized())
