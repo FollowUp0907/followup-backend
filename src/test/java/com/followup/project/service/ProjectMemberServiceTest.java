@@ -58,6 +58,7 @@ class ProjectMemberServiceTest {
     private Long memberId;
     private Long outsiderId;
     private String memberEmail;
+    private String outsiderEmail;
 
     @BeforeEach
     void setUp() {
@@ -73,8 +74,9 @@ class ProjectMemberServiceTest {
                 .password("pw")
                 .name("Member")
                 .build()).getId();
+        outsiderEmail = "outsider-" + suffix + "@test.com";
         outsiderId = userRepository.save(User.builder()
-                .email("outsider-" + suffix + "@test.com")
+                .email(outsiderEmail)
                 .password("pw")
                 .name("Outsider")
                 .build()).getId();
@@ -171,19 +173,45 @@ class ProjectMemberServiceTest {
         assertThat(projectMemberRepository.existsByProjectIdAndUserId(projectId, memberId)).isFalse();
     }
 
+    /** 본인이 아닌 다른 멤버를 제거하려는 시도는 여전히 OWNER만 가능하다. */
     @Test
-    void removeMember_memberForbidden() {
+    void removeMember_memberForbiddenToRemoveSomeoneElse() {
         Long projectId = createProjectAsOwner();
         projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(outsiderEmail));
 
         actingAs(memberId);
 
-        assertThatThrownBy(() -> projectMemberService.removeMember(projectId, memberId))
+        assertThatThrownBy(() -> projectMemberService.removeMember(projectId, outsiderId))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PROJECT_OWNER_REQUIRED);
     }
 
+    /** 본인이 본인을 제거하는 "나가기"는 OWNER가 아니어도 허용되고, 담당 업무는 담당자만 빠진 채 남는다. */
+    @Test
+    void removeMember_selfRemoval_leavesProjectAndUnassignsActionItems() {
+        Long projectId = createProjectAsOwner();
+        projectMemberService.addMember(projectId, new ProjectMemberCreateReqDto(memberEmail));
+
+        ActionItem actionItem = actionItemRepository.save(ActionItem.builder()
+                .project(projectRepository.getReferenceById(projectId))
+                .title("Task")
+                .status(ActionItemStatus.TODO)
+                .priority(Priority.MEDIUM)
+                .build());
+        actionItem.replaceAssignees(Set.of(userRepository.getReferenceById(memberId)));
+        actionItemRepository.save(actionItem);
+
+        actingAs(memberId);
+        projectMemberService.removeMember(projectId, memberId);
+
+        assertThat(projectMemberRepository.existsByProjectIdAndUserId(projectId, memberId)).isFalse();
+        ActionItem reloaded = actionItemRepository.findById(actionItem.getId()).orElseThrow();
+        assertThat(reloaded.getAssignees()).isEmpty();
+    }
+
+    /** OWNER가 본인 스스로 나가려는 시도도(자기 자신을 대상으로 호출) 여전히 막혀야 한다. */
     @Test
     void removeMember_ownerCannotBeRemoved() {
         Long projectId = createProjectAsOwner();

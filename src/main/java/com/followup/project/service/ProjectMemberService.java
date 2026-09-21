@@ -68,13 +68,18 @@ public class ProjectMemberService {
     }
 
     /**
-     * OWNER만 가능하며, OWNER 역할은 제거할 수 없다(소유권 이전 기능이 아직 없음).
-     * 제거되는 멤버가 담당자로 걸려 있던 ActionItem에서는 그 사람만 담당자 목록에서 뺀다.
+     * 본인이 본인을 제거하는 경우("나가기")는 OWNER 여부와 무관하게 허용한다 — 단, 그 본인이 OWNER
+     * 역할이면 여전히 나갈 수 없다(소유권 이전 기능이 아직 없음). 남을 제거하는 경우는 기존처럼
+     * OWNER만 가능하다. 제거되는 멤버가 담당자로 걸려 있던 ActionItem에서는 그 사람만 담당자 목록에서 뺀다.
      */
     @Transactional
     public void removeMember(Long projectId, Long userId) {
         getProjectOrThrow(projectId);
-        requireOwner(projectId, currentUserProvider.getCurrentUserId());
+        Long actorId = currentUserProvider.getCurrentUserId();
+        boolean isSelfRemoval = actorId.equals(userId);
+        if (!isSelfRemoval) {
+            requireOwner(projectId, actorId);
+        }
 
         ProjectMember member = projectMemberRepository.findByProjectIdAndUserId(projectId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROJECT_MEMBER_NOT_FOUND));
