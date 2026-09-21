@@ -6,7 +6,10 @@ import com.followup.notification.dto.UnreadCountResDto;
 import com.followup.notification.service.NotificationService;
 import com.followup.notification.sse.SseEmitterRegistry;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -70,7 +73,20 @@ public class NotificationController {
      * 알림 실시간 스트림(SSE). EventSource는 커스텀 헤더를 못 실으므로 이 경로는 쿼리 파라미터 토큰
      * 인증도 허용된다(JwtAuthenticationFilter 참고). 폴링을 대체하지 않고 추가되는 채널이다.
      */
-    @Operation(summary = "알림 실시간 스트림 (SSE)")
+    @Operation(
+            summary = "알림 실시간 스트림 (SSE)",
+            description = "이 엔드포인트는 Authorization 헤더 대신 ?token= 쿼리 파라미터로 인증한다."
+    )
+    @Parameter(
+            name = "token",
+            in = ParameterIn.QUERY,
+            required = true,
+            description = "JWT 액세스 토큰. EventSource가 커스텀 헤더를 지원하지 않아 이 경로에서만 쿼리 파라미터로 "
+                    + "인증한다. 다른 모든 엔드포인트는 Authorization 헤더만 허용한다."
+    )
+    // 실제 인증 요구사항은 그대로다(JwtAuthenticationFilter가 쿼리 토큰을 검증) — 여기서는 다른 엔드포인트와
+    // 같은 bearerAuth 자물쇠가 오해를 주지 않도록 문서 표시만 빈 SecurityRequirement로 재정의한다.
+    @SecurityRequirements
     @GetMapping(value = "/notifications/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream() {
         Long userId = currentUserProvider.getCurrentUserId();
