@@ -34,7 +34,13 @@ class JwtProviderTest {
     @Test
     void validateAndGetUserId_tamperedSignatureRejected() {
         String token = jwtProvider.generateAccessToken(1L);
-        String tampered = token.substring(0, token.length() - 1) + (token.endsWith("A") ? "B" : "A");
+        // 서명 세그먼트의 마지막 글자는 base64 패딩 비트라 바꿔도 디코딩된 바이트가 그대로일 때가 있다
+        // (그래서 이 테스트가 가끔 flaky했다). 첫 글자는 항상 실제 서명 바이트의 상위 비트를 나타내므로
+        // 어떤 문자로 바꾸든 반드시 디코딩 결과가 달라진다.
+        String[] parts = token.split("\\.");
+        char[] sigChars = parts[2].toCharArray();
+        sigChars[0] = sigChars[0] == 'A' ? 'B' : 'A';
+        String tampered = parts[0] + "." + parts[1] + "." + new String(sigChars);
 
         assertThatThrownBy(() -> jwtProvider.validateAndGetUserId(tampered))
                 .isInstanceOf(BusinessException.class)
