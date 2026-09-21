@@ -28,7 +28,11 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    /** JWT로 무상태 인증을 하므로 세션/CSRF를 쓰지 않으며, signup/login/google/health만 인증 없이 허용한다. */
+    /**
+     * JWT로 무상태 인증을 하므로 세션/CSRF를 쓰지 않으며, signup/login/google/health/초대 확인(GET)만
+     * 인증 없이 허용한다. 초대 확인은 로그인 전 사용자도 메일의 토큰 링크로 내용을 봐야 해서 예외로 둔다 —
+     * 수락(POST)은 로그인이 필요하므로 여기 포함하지 않는다.
+     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -38,7 +42,7 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/auth/signup", "/api/auth/login", "/api/auth/google").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/health", "/api/invitations/*").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

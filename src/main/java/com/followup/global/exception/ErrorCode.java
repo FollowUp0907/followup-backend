@@ -37,6 +37,13 @@ public enum ErrorCode {
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "HTTP method not supported for this path"),
     NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "Notification not found"),
     NOTIFICATION_ACCESS_DENIED(HttpStatus.FORBIDDEN, "You do not have access to this notification"),
+    INVITATION_NOT_FOUND(HttpStatus.NOT_FOUND, "Invitation not found"),
+    INVITATION_ALREADY_EXISTS(HttpStatus.CONFLICT, "A pending invitation already exists for this email"),
+    INVITATION_EXPIRED(HttpStatus.GONE, "Invitation has expired"),
+    INVITATION_CANCELLED(HttpStatus.BAD_REQUEST, "Invitation has been cancelled"),
+    INVITATION_ALREADY_ACCEPTED(HttpStatus.BAD_REQUEST, "Invitation has already been accepted"),
+    INVITATION_EMAIL_MISMATCH(HttpStatus.FORBIDDEN, "This invitation was sent to a different email"),
+    PROJECT_MEMBER_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "Project member limit exceeded"),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
 
     private final HttpStatus status;

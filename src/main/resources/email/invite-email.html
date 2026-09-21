@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FollowUp 초대</title>
+    <style>
+      @media only screen and (max-width: 600px) {
+        .pad { padding-left: 20px !important; padding-right: 20px !important; }
+      }
+    </style>
+  </head>
+  <body style="margin:0; padding:0; background-color:#f3f4f6;">
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0;">
+      {{inviterName}} 님이 {{projectName}} 프로젝트에 초대했습니다. {{expiresDays}}일 안에 수락해 주세요.
+    </div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f3f4f6;">
+      <tr>
+        <td align="center" style="padding:40px 16px;">
+          <!--[if mso]><table role="presentation" width="560" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                 style="width:100%; max-width:560px; background-color:#ffffff; border:1px solid #e5e7eb; border-radius:12px;">
+            <tr>
+              <td class="pad" style="padding:32px 32px 0 32px;">
+                <span style="font-family:Inter,-apple-system,'Segoe UI',Roboto,sans-serif; font-size:16px; font-weight:600; letter-spacing:-0.3px; color:#111111;">
+                  FollowUp
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <td class="pad" style="padding:24px 32px 0 32px;">
+                <h1 style="margin:0; font-family:Inter,-apple-system,'Segoe UI',Roboto,sans-serif; font-size:24px; line-height:1.3; letter-spacing:-0.5px; font-weight:600; color:#111111;">
+                  {{projectName}} 에 초대받았습니다
+                </h1>
+              </td>
+            </tr>
+            <tr>
+              <td class="pad" style="padding:16px 32px 0 32px;">
+                <p style="margin:0; font-family:Inter,-apple-system,'Segoe UI',Roboto,sans-serif; font-size:15px; line-height:1.6; color:#374151;">
+                  <strong style="color:#111111;">{{inviterName}}</strong> 님이
+                  <strong style="color:#111111;">{{inviteeEmail}}</strong> 로 초대를 보냈습니다.<br />
+                  아래 버튼을 눌러 수락하면 이 프로젝트의 회의록과 후속 업무를 함께 볼 수 있습니다.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td class="pad" style="padding:28px 32px 0 32px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td align="center" bgcolor="#111111" style="border-radius:8px;">
+                      <a href="{{acceptUrl}}"
+                         style="display:inline-block; padding:14px 28px; font-family:Inter,-apple-system,'Segoe UI',Roboto,sans-serif; font-size:15px; font-weight:600; color:#ffffff; text-decoration:none; border-radius:8px;">
+                        초대 수락하기
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td class="pad" style="padding:24px 32px 0 32px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                       style="background-color:#f3f4f6; border-radius:8px;">
+                  <tr>
+                    <td style="padding:14px 16px; font-family:Inter,-apple-system,'Segoe UI',Roboto,sans-serif; font-size:13px; line-height:1.6; color:#6b7280;">
+                      FollowUp 계정이 없으신가요? 버튼을 누른 뒤 가입만 하시면 이 프로젝트에 자동으로 합류합니다.
+                      가입은 <strong style="color:#374151;">{{inviteeEmail}}</strong> 주소로 해 주세요.
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td class="pad" style="padding:20px 32px 0 32px;">
+                <p style="margin:0; font-family:Inter,-apple-system,'Segoe UI',Roboto,sans-serif; font-size:12px; line-height:1.6; color:#898989;">
+                  버튼이 눌리지 않으면 아래 주소를 브라우저에 붙여 넣어 주세요.<br />
+                  <a href="{{acceptUrl}}" style="color:#6b7280; word-break:break-all;">{{acceptUrl}}</a>
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td class="pad" style="padding:24px 32px 32px 32px;">
+                <div style="border-top:1px solid #e5e7eb; padding-top:16px;">
+                  <p style="margin:0; font-family:Inter,-apple-system,'Segoe UI',Roboto,sans-serif; font-size:12px; line-height:1.6; color:#898989;">
+                    이 초대는 {{expiresDays}}일 뒤에 만료됩니다.<br />
+                    모르는 초대라면 이 메일을 무시하셔도 됩니다. 아무 일도 일어나지 않습니다.
+                  </p>
+                </div>
+              </td>
+            </tr>
+          </table>
+          <!--[if mso]></td></tr></table><![endif]-->
+          <p style="margin:24px 0 0 0; font-family:Inter,-apple-system,'Segoe UI',Roboto,sans-serif; font-size:12px; color:#898989;">
+            © FollowUp
+          </p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
