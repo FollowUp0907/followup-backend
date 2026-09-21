@@ -132,9 +132,15 @@ public class InvitationService {
         return InvitationViewResDto.from(getInvitationByTokenOrThrow(token));
     }
 
+    /**
+     * 토큰 조회부터 비관적 쓰기 락을 걸어 같은 토큰에 대한 동시 수락 요청을 직렬화한다 — 그래야
+     * 두 요청이 동시에 status==PENDING을 읽고 둘 다 ProjectMember를 insert하려다 유니크 제약 위반으로
+     * 한쪽이 처리되지 않은 예외(500)를 내는 대신, 뒤에 도착한 쪽이 잠금 해제 후 바뀐 상태를 다시 읽어
+     * INVITATION_ALREADY_ACCEPTED로 깔끔하게 끝난다.
+     */
     @Transactional
     public InvitationResDto acceptInvitation(String token, Long currentUserId) {
-        ProjectInvitation invitation = getInvitationByTokenOrThrow(token);
+        ProjectInvitation invitation = getInvitationByTokenForUpdateOrThrow(token);
 
         if (invitation.getStatus() == InvitationStatus.CANCELLED) {
             throw new BusinessException(ErrorCode.INVITATION_CANCELLED);
@@ -195,6 +201,11 @@ public class InvitationService {
 
     private ProjectInvitation getInvitationByTokenOrThrow(String token) {
         return projectInvitationRepository.findByTokenHash(invitationTokenGenerator.hash(token))
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVITATION_NOT_FOUND));
+    }
+
+    private ProjectInvitation getInvitationByTokenForUpdateOrThrow(String token) {
+        return projectInvitationRepository.findByTokenHashForUpdate(invitationTokenGenerator.hash(token))
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVITATION_NOT_FOUND));
     }
 

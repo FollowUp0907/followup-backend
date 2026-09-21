@@ -2,14 +2,27 @@ package com.followup.invitation.repository;
 
 import com.followup.invitation.entity.InvitationStatus;
 import com.followup.invitation.entity.ProjectInvitation;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface ProjectInvitationRepository extends JpaRepository<ProjectInvitation, Long> {
 
     Optional<ProjectInvitation> findByTokenHash(String tokenHash);
+
+    /**
+     * accept 전용 — 같은 토큰에 대한 동시 수락 요청(상태 확인 + ProjectMember insert)을 직렬화하는
+     * 비관적 쓰기 락 조회다(MeetingRepository.findByIdForUpdate와 같은 패턴). view/resend 등 락이
+     * 필요 없는 다른 조회에는 쓰지 않는다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select i from ProjectInvitation i where i.tokenHash = :tokenHash")
+    Optional<ProjectInvitation> findByTokenHashForUpdate(@Param("tokenHash") String tokenHash);
 
     List<ProjectInvitation> findAllByProjectId(Long projectId);
 
