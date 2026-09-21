@@ -15,9 +15,13 @@ import com.followup.ai.repository.AiAnalysisRunRepository;
 import com.followup.global.exception.BusinessException;
 import com.followup.global.exception.ErrorCode;
 import com.followup.global.security.CurrentUserProvider;
+import com.followup.invitation.entity.InvitationStatus;
+import com.followup.invitation.entity.ProjectInvitation;
+import com.followup.invitation.repository.ProjectInvitationRepository;
 import com.followup.meeting.dto.MeetingCreateReqDto;
 import com.followup.meeting.dto.MeetingDetailResDto;
 import com.followup.meeting.entity.Decision;
+import com.followup.meeting.entity.Meeting;
 import com.followup.meeting.repository.DecisionRepository;
 import com.followup.meeting.repository.MeetingRepository;
 import com.followup.meeting.service.MeetingService;
@@ -78,6 +82,9 @@ class ProjectServiceTest {
 
     @Autowired
     private NotificationRepository notificationRepository;
+
+    @Autowired
+    private ProjectInvitationRepository projectInvitationRepository;
 
     @MockitoBean
     private CurrentUserProvider currentUserProvider;
@@ -272,6 +279,70 @@ class ProjectServiceTest {
         assertThat(actionItemRepository.findById(originated.getId())).isEmpty();
         assertThat(meetingActionLinkRepository.findAllByMeetingId(meeting.id())).isEmpty();
         assertThat(notificationRepository.findByActionItemId(originated.getId())).isEmpty();
+    }
+
+    /** V13 사전 정리 작업 전에는 project_invitations를 안 지워서 PENDING 초대가 있으면 FK 위반으로 삭제가 실패했었다. */
+    @Test
+    void deleteProject_withPendingInvitation_succeeds() {
+        actingAs(ownerId);
+        ProjectResDto project = projectService.createProject(new ProjectCreateReqDto("P", null));
+        Long projectId = project.id();
+
+        ProjectInvitation invitation = projectInvitationRepository.save(ProjectInvitation.builder()
+                .project(projectRepository.getReferenceById(projectId))
+                .email("invitee-" + UUID.randomUUID() + "@test.com")
+                .tokenHash("hash-" + UUID.randomUUID())
+                .status(InvitationStatus.PENDING)
+                .invitedBy(userRepository.getReferenceById(ownerId))
+                .invitedAt(LocalDateTime.now())
+                .expiresAt(LocalDateTime.now().plusDays(7))
+                .build());
+
+        projectService.deleteProject(projectId);
+
+        assertThat(projectRepository.findById(projectId)).isEmpty();
+        assertThat(projectInvitationRepository.findById(invitation.getId())).isEmpty();
+    }
+
+    /**
+     * action_item_id 기준 삭제(deleteAllByActionItemIdIn)만으로는 업무와 무관한(actionItemId가 null인)
+     * 알림을 못 지워서, project_id 기준 삭제를 추가하기 전에는 FK 위반으로 삭제가 실패했었다.
+     */
+    @Test
+    void deleteProject_withActionItemlessNotification_succeeds() {
+        actingAs(ownerId);
+        ProjectResDto project = projectService.createProject(new ProjectCreateReqDto("P", null));
+        Long projectId = project.id();
+
+        Notification notification = notificationRepository.save(Notification.builder()
+                .user(userRepository.getReferenceById(ownerId))
+                .project(projectRepository.getReferenceById(projectId))
+                .actionItem(null)
+                .taskTitle("Account related")
+                .remindAt(LocalDateTime.now())
+                .build());
+
+        projectService.deleteProject(projectId);
+
+        assertThat(projectRepository.findById(projectId)).isEmpty();
+        assertThat(notificationRepository.findById(notification.getId())).isEmpty();
+    }
+
+    /** V13에서 meetings.created_by를 nullable로 바꾼 것이 엔티티 레벨(저장)에서도 실제로 먹히는지 확인한다. */
+    @Test
+    void meetingCreatedBy_canBeSetToNull() {
+        actingAs(ownerId);
+        ProjectResDto otherProject = projectService.createProject(new ProjectCreateReqDto("Other P", null));
+        MeetingDetailResDto meeting = meetingService.createMeeting(otherProject.id(),
+                new MeetingCreateReqDto("Sync", LocalDateTime.of(2026, 9, 7, 10, 0), null, null, null));
+        Meeting entity = meetingRepository.findById(meeting.id()).orElseThrow();
+        assertThat(entity.getCreatedBy()).isNotNull();
+
+        entity.detachCreator();
+        Meeting saved = meetingRepository.saveAndFlush(entity);
+
+        assertThat(saved.getCreatedBy()).isNull();
+        assertThat(projectRepository.findById(otherProject.id())).isPresent();
     }
 
     @Test

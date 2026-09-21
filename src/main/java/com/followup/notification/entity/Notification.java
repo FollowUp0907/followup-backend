@@ -42,8 +42,9 @@ public class Notification {
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
 
+    /** 업무와 무관한 알림(예: 향후 계정 관련 알림)을 위해 nullable이다. */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "action_item_id", nullable = false)
+    @JoinColumn(name = "action_item_id")
     private ActionItem actionItem;
 
     @Column(name = "task_title", nullable = false, length = 255)

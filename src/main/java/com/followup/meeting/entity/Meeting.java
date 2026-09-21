@@ -51,8 +51,9 @@ public class Meeting {
     @Column(name = "status", nullable = false, length = 20)
     private MeetingStatus status;
 
+    /** 만든 사용자가 탈퇴하면 null이 된다(회원 탈퇴 시 회의 자체는 유지). */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "created_by", nullable = false)
+    @JoinColumn(name = "created_by")
     private User createdBy;
 
     @Column(name = "created_at", nullable = false)
@@ -90,6 +91,11 @@ public class Meeting {
     /** 결정사항/AI분석이력/업무 등 하위 데이터는 그대로 둔 채 회의만 조회 대상에서 숨긴다. */
     public void softDelete() {
         this.deletedAt = LocalDateTime.now();
+    }
+
+    /** 만든 사용자가 탈퇴할 때 회의 자체는 유지한 채 참조만 끊는다. */
+    public void detachCreator() {
+        this.createdBy = null;
     }
 
     @PrePersist

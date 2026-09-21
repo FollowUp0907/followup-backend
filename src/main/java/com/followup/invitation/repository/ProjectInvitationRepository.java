@@ -31,4 +31,7 @@ public interface ProjectInvitationRepository extends JpaRepository<ProjectInvita
 
     /** 정원 체크용 — 만료된 채 방치된 PENDING 초대는 정원을 차지하지 않도록 expiresAt까지 함께 따진다. */
     long countByProjectIdAndStatusAndExpiresAtAfter(Long projectId, InvitationStatus status, LocalDateTime now);
+
+    /** 프로젝트 cascade 삭제용 — 다른 테이블이 project_invitations를 참조하지 않아 이른 시점에 지워도 된다. */
+    void deleteAllByProjectId(Long projectId);
 }

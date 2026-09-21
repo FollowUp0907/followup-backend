@@ -6,6 +6,7 @@ import com.followup.ai.repository.AiAnalysisRunRepository;
 import com.followup.global.exception.BusinessException;
 import com.followup.global.exception.ErrorCode;
 import com.followup.global.security.CurrentUserProvider;
+import com.followup.invitation.repository.ProjectInvitationRepository;
 import com.followup.meeting.repository.DecisionRepository;
 import com.followup.meeting.repository.MeetingParticipantRepository;
 import com.followup.meeting.repository.MeetingRepository;
@@ -39,6 +40,7 @@ public class ProjectService {
     private final MeetingActionLinkRepository meetingActionLinkRepository;
     private final MeetingParticipantRepository meetingParticipantRepository;
     private final NotificationRepository notificationRepository;
+    private final ProjectInvitationRepository projectInvitationRepository;
     private final CurrentUserProvider currentUserProvider;
 
     /**
@@ -104,11 +106,14 @@ public class ProjectService {
      * OWNER만 삭제할 수 있다. Meeting은 soft-delete 대상이라 findIdsByProjectId로 삭제 여부와 무관하게
      * 전체 id를 구한 뒤, 하위 데이터를 애플리케이션 레벨에서 명시적 순서로 정리하고 마지막에 하드 삭제한다.
      * meeting_action_links는 action_items.id를 참조하므로(FK RESTRICT) action_items보다 먼저 지운다.
+     * project_invitations는 다른 테이블이 참조하지 않아 이른 시점에 지운다.
      */
     @Transactional
     public void deleteProject(Long projectId) {
         Project project = getProjectOrThrow(projectId);
         requireOwner(projectId, currentUserProvider.getCurrentUserId());
+
+        projectInvitationRepository.deleteAllByProjectId(projectId);
 
         List<Long> meetingIds = meetingRepository.findIdsByProjectId(projectId);
         List<Long> actionItemIds = actionItemRepository.findIdsByProjectId(projectId);
@@ -116,6 +121,8 @@ public class ProjectService {
         meetingActionLinkRepository.deleteAllByMeetingIdIn(meetingIds);
         meetingParticipantRepository.deleteAllByMeetingIdIn(meetingIds);
         notificationRepository.deleteAllByActionItemIdIn(actionItemIds);
+        // actionItemId가 null인(업무와 무관한) 알림은 위 삭제로 안 지워지므로 project_id 기준으로 추가 정리한다.
+        notificationRepository.deleteAllByProjectId(projectId);
         if (!actionItemIds.isEmpty()) {
             actionItemRepository.deleteAllAssigneesByActionItemIdIn(actionItemIds);
         }

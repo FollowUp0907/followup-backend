@@ -35,8 +35,9 @@ public class AiAnalysisRun {
     @JoinColumn(name = "meeting_id", nullable = false)
     private Meeting meeting;
 
+    /** 요청한 사용자가 탈퇴하면 null이 된다(회원 탈퇴 시 분석 이력 자체는 유지). */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "requested_by", nullable = false)
+    @JoinColumn(name = "requested_by")
     private User requestedBy;
 
     @Enumerated(EnumType.STRING)
