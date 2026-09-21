@@ -32,9 +32,6 @@ class SecurityIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @Autowired
-    private JwtProvider jwtProvider;
-
     @Value("${jwt.secret}")
     private String jwtSecret;
 

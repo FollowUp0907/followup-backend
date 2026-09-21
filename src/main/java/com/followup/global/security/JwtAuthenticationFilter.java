@@ -1,7 +1,6 @@
 package com.followup.global.security;
 
 import com.followup.global.exception.BusinessException;
-import com.followup.global.exception.ErrorCode;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
