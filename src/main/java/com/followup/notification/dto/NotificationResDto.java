@@ -21,7 +21,7 @@ public record NotificationResDto(
                 notification.getId(),
                 notification.getUser().getId(),
                 notification.getProject().getId(),
-                notification.getActionItem().getId(),
+                notification.getActionItem() != null ? notification.getActionItem().getId() : null,
                 notification.getTaskTitle(),
                 notification.getType(),
                 notification.getRemindAt(),

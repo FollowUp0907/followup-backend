@@ -13,6 +13,7 @@ import com.followup.invitation.util.InvitationTokenGenerator;
 import com.followup.project.entity.Project;
 import com.followup.project.entity.ProjectMember;
 import com.followup.project.entity.ProjectRole;
+import com.followup.project.event.MemberJoinedEvent;
 import com.followup.project.repository.ProjectMemberRepository;
 import com.followup.project.repository.ProjectRepository;
 import com.followup.user.entity.User;
@@ -20,6 +21,7 @@ import com.followup.user.repository.UserRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +39,7 @@ public class InvitationService {
     private final InvitationTokenGenerator invitationTokenGenerator;
     private final InvitationEmailService invitationEmailService;
     private final CurrentUserProvider currentUserProvider;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Project를 비관적 쓰기 락으로 먼저 잠가 같은 프로젝트에 대한 동시 초대 요청을 직렬화한다
@@ -165,6 +168,7 @@ public class InvitationService {
                     .user(currentUser)
                     .role(ProjectRole.MEMBER)
                     .build());
+            eventPublisher.publishEvent(new MemberJoinedEvent(invitation.getProject(), currentUser));
         }
         invitation.accept();
 

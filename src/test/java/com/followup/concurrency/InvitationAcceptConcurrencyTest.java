@@ -13,6 +13,7 @@ import com.followup.invitation.entity.ProjectInvitation;
 import com.followup.invitation.repository.ProjectInvitationRepository;
 import com.followup.invitation.service.InvitationService;
 import com.followup.invitation.util.InvitationTokenGenerator;
+import com.followup.notification.repository.NotificationRepository;
 import com.followup.project.dto.ProjectCreateReqDto;
 import com.followup.project.dto.ProjectResDto;
 import com.followup.project.repository.ProjectMemberRepository;
@@ -65,6 +66,9 @@ class InvitationAcceptConcurrencyTest {
 
     @Autowired
     private ProjectInvitationRepository projectInvitationRepository;
+
+    @Autowired
+    private NotificationRepository notificationRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -120,6 +124,8 @@ class InvitationAcceptConcurrencyTest {
     void cleanUp() {
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             projectInvitationRepository.deleteById(invitationId);
+            // acceptInvitation이 MEMBER_JOINED 알림(actionItemId=null)을 만들 수 있으므로 먼저 정리한다.
+            notificationRepository.deleteAllByProjectId(projectId);
             projectMemberRepository.deleteAllByProjectId(projectId);
             projectRepository.deleteById(projectId);
             userRepository.deleteById(inviteeUserId);

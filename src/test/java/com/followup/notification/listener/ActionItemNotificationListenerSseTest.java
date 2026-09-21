@@ -15,6 +15,7 @@ import com.followup.notification.entity.NotificationType;
 import com.followup.notification.repository.NotificationRepository;
 import com.followup.notification.sse.SseEmitterRegistry;
 import com.followup.project.entity.Project;
+import com.followup.project.repository.ProjectMemberRepository;
 import com.followup.user.entity.User;
 import com.followup.user.repository.UserRepository;
 import java.time.LocalDateTime;
@@ -29,11 +30,13 @@ class ActionItemNotificationListenerSseTest {
 
     private final NotificationRepository notificationRepository = mock(NotificationRepository.class);
     private final MeetingParticipantRepository meetingParticipantRepository = mock(MeetingParticipantRepository.class);
+    private final ProjectMemberRepository projectMemberRepository = mock(ProjectMemberRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
     private final SseEmitterRegistry sseEmitterRegistry = new SseEmitterRegistry();
 
     private final ActionItemNotificationListener listener = new ActionItemNotificationListener(
-            notificationRepository, meetingParticipantRepository, userRepository, sseEmitterRegistry);
+            notificationRepository, meetingParticipantRepository, projectMemberRepository, userRepository,
+            sseEmitterRegistry);
 
     @Test
     void onTaskAssigned_sendsToRegisteredEmitterForTargetUser() throws Exception {

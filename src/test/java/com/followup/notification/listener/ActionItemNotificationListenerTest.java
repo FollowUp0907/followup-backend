@@ -12,6 +12,12 @@ import com.followup.actionitem.entity.Priority;
 import com.followup.actionitem.repository.ActionItemRepository;
 import com.followup.actionitem.service.ActionItemService;
 import com.followup.global.security.CurrentUserProvider;
+import com.followup.invitation.dto.InvitationResDto;
+import com.followup.invitation.entity.InvitationStatus;
+import com.followup.invitation.entity.ProjectInvitation;
+import com.followup.invitation.repository.ProjectInvitationRepository;
+import com.followup.invitation.service.InvitationService;
+import com.followup.invitation.util.InvitationTokenGenerator;
 import com.followup.meeting.dto.MeetingCreateReqDto;
 import com.followup.meeting.dto.MeetingDetailResDto;
 import com.followup.meeting.repository.MeetingParticipantRepository;
@@ -87,6 +93,15 @@ class ActionItemNotificationListenerTest {
     private UserRepository userRepository;
 
     @Autowired
+    private InvitationService invitationService;
+
+    @Autowired
+    private ProjectInvitationRepository projectInvitationRepository;
+
+    @Autowired
+    private InvitationTokenGenerator invitationTokenGenerator;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     @MockitoBean
@@ -138,6 +153,9 @@ class ActionItemNotificationListenerTest {
                 meetingParticipantRepository.deleteAllByMeetingId(meetingId);
                 meetingRepository.deleteById(meetingId);
             }
+            // MEMBER_JOINED 알림은 actionItemId가 null이라 위 루프로는 안 지워지므로 project_id로 정리한다.
+            notificationRepository.deleteAllByProjectId(projectId);
+            projectInvitationRepository.deleteAllByProjectId(projectId);
             projectMemberRepository.deleteAllByProjectId(projectId);
             projectRepository.deleteById(projectId);
             userRepository.deleteById(memberCId);
@@ -195,6 +213,20 @@ class ActionItemNotificationListenerTest {
                 new MeetingCreateReqDto("Sync", LocalDateTime.of(2026, 9, 20, 10, 0), "notes", participantIds, null));
         meetingId = meeting.id();
         return meetingId;
+    }
+
+    private String saveRawInvitation(String email) {
+        String rawToken = "raw-token-" + UUID.randomUUID();
+        projectInvitationRepository.save(ProjectInvitation.builder()
+                .project(projectRepository.getReferenceById(projectId))
+                .email(email)
+                .tokenHash(invitationTokenGenerator.hash(rawToken))
+                .status(InvitationStatus.PENDING)
+                .invitedBy(userRepository.getReferenceById(ownerId))
+                .invitedAt(LocalDateTime.now())
+                .expiresAt(LocalDateTime.now().plusDays(7))
+                .build());
+        return rawToken;
     }
 
     private ActionItem createTaskWithOriginMeeting(Long originMeetingId, Long assigneeId, Long creatorId) {
@@ -380,5 +412,43 @@ class ActionItemNotificationListenerTest {
         assertThat(countByType(memberBId, NotificationType.TASK_COMPLETED)).isEqualTo(1);
         assertThat(countByType(memberCId, NotificationType.TASK_COMPLETED)).isEqualTo(1);
         assertThat(countByType(ownerId, NotificationType.TASK_COMPLETED)).isEqualTo(1);
+    }
+
+    // ---- MEMBER_JOINED ----
+
+    @Test
+    void memberJoined_existingMembersEachGetOneNotification_joinerGetsNone() {
+        String suffix = UUID.randomUUID().toString();
+        String joinerEmail = "d-" + suffix + "@test.com";
+        Long joinerId = userRepository.save(User.builder()
+                .email(joinerEmail).password("pw").name("D").build()).getId();
+        extraMemberIds.add(joinerId);
+        String rawToken = saveRawInvitation(joinerEmail);
+
+        InvitationResDto accepted = invitationService.acceptInvitation(rawToken, joinerId);
+
+        assertThat(accepted.status()).isEqualTo(InvitationStatus.ACCEPTED);
+        assertThat(countByType(ownerId, NotificationType.MEMBER_JOINED)).isEqualTo(1);
+        assertThat(countByType(memberBId, NotificationType.MEMBER_JOINED)).isEqualTo(1);
+        assertThat(countByType(memberCId, NotificationType.MEMBER_JOINED)).isEqualTo(1);
+        assertThat(notificationsFor(joinerId)).isEmpty();
+
+        Notification notification = notificationsFor(ownerId).stream()
+                .filter(n -> n.getType() == NotificationType.MEMBER_JOINED)
+                .findFirst().orElseThrow();
+        assertThat(notification.getTaskTitle()).isEqualTo("D");
+        assertThat(notification.getActionItem()).isNull();
+    }
+
+    @Test
+    void memberJoined_alreadyMember_noNotification() {
+        String rejoinEmail = emailOf(memberBId);
+        String rawToken = saveRawInvitation(rejoinEmail);
+        // 이미 멤버인 채로 다시 초대 토큰을 발급받는 상황을 흉내 낸다 — 새 합류가 아니므로 알림이 없어야 한다.
+
+        invitationService.acceptInvitation(rawToken, memberBId);
+
+        assertThat(notificationsFor(ownerId)).isEmpty();
+        assertThat(countByType(memberCId, NotificationType.MEMBER_JOINED)).isZero();
     }
 }

@@ -5,5 +5,6 @@ public enum NotificationType {
     TASK_UPDATED,
     TASK_COMPLETED,
     OVERDUE,
-    DUE_SOON
+    DUE_SOON,
+    MEMBER_JOINED
 }

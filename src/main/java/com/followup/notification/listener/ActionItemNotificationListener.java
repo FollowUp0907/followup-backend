@@ -10,6 +10,9 @@ import com.followup.notification.entity.Notification;
 import com.followup.notification.entity.NotificationType;
 import com.followup.notification.repository.NotificationRepository;
 import com.followup.notification.sse.SseEmitterRegistry;
+import com.followup.project.entity.Project;
+import com.followup.project.event.MemberJoinedEvent;
+import com.followup.project.repository.ProjectMemberRepository;
 import com.followup.user.repository.UserRepository;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
@@ -22,9 +25,9 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * 업무 이벤트를 알림으로 변환한다. 각 핸들러는 원래 트랜잭션이 커밋된 뒤(AFTER_COMMIT)에만 실행되므로,
- * 여기서 만드는 알림은 실제로 반영된 변경에 대해서만 생성된다. AFTER_COMMIT 시점엔 원래 트랜잭션이
- * 이미 끝나 있어 별도 트랜잭션이 필요하므로 각 메서드에 @Transactional을 직접 붙인다.
+ * 업무/멤버십 이벤트를 알림으로 변환한다. 각 핸들러는 원래 트랜잭션이 커밋된 뒤(AFTER_COMMIT)에만
+ * 실행되므로, 여기서 만드는 알림은 실제로 반영된 변경에 대해서만 생성된다. AFTER_COMMIT 시점엔 원래
+ * 트랜잭션이 이미 끝나 있어 별도 트랜잭션이 필요하므로 각 메서드에 @Transactional을 직접 붙인다.
  */
 @Component
 @RequiredArgsConstructor
@@ -32,6 +35,7 @@ public class ActionItemNotificationListener {
 
     private final NotificationRepository notificationRepository;
     private final MeetingParticipantRepository meetingParticipantRepository;
+    private final ProjectMemberRepository projectMemberRepository;
     private final UserRepository userRepository;
     private final SseEmitterRegistry sseEmitterRegistry;
 
@@ -73,13 +77,34 @@ public class ActionItemNotificationListener {
         recipientIds.forEach(userId -> notify(item, userId, NotificationType.TASK_COMPLETED));
     }
 
-    /** 저장 직후 SSE로도 밀어 보낸다 — 폴링은 그대로 유지되고 SSE는 추가되는 실시간 채널이다. */
+    /** 그 프로젝트의 기존 멤버 전원(방금 합류한 사람 본인 제외)에게 알린다. */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onMemberJoined(MemberJoinedEvent event) {
+        Long joinedUserId = event.joinedUser().getId();
+
+        projectMemberRepository.findAllByProjectId(event.project().getId()).stream()
+                .map(member -> member.getUser().getId())
+                .filter(userId -> !userId.equals(joinedUserId))
+                .forEach(userId -> notify(event.project(), userId, event.joinedUser().getName(),
+                        NotificationType.MEMBER_JOINED));
+    }
+
     private void notify(ActionItem item, Long userId, NotificationType type) {
+        notify(item.getProject(), item, userId, item.getTitle(), type);
+    }
+
+    private void notify(Project project, Long userId, String taskTitle, NotificationType type) {
+        notify(project, null, userId, taskTitle, type);
+    }
+
+    /** 저장 직후 SSE로도 밀어 보낸다 — 폴링은 그대로 유지되고 SSE는 추가되는 실시간 채널이다. */
+    private void notify(Project project, ActionItem actionItem, Long userId, String taskTitle, NotificationType type) {
         Notification notification = notificationRepository.save(Notification.builder()
                 .user(userRepository.getReferenceById(userId))
-                .project(item.getProject())
-                .actionItem(item)
-                .taskTitle(item.getTitle())
+                .project(project)
+                .actionItem(actionItem)
+                .taskTitle(taskTitle)
                 .remindAt(LocalDateTime.now())
                 .type(type)
                 .build());
