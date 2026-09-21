@@ -23,4 +23,14 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     void deleteByActionItemId(Long actionItemId);
 
     void deleteAllByActionItemIdIn(List<Long> actionItemIds);
+
+    /**
+     * 프로젝트 cascade 삭제용 — action_item_id 기준 삭제(deleteAllByActionItemIdIn)로는 actionItemId가
+     * null인 알림(업무와 무관한 알림)을 못 지우므로 project_id 기준으로 한 번 더 정리한다. 이미 지워진
+     * 알림에 대해서는 그냥 0건 삭제되므로 중복 호출이어도 문제없다.
+     */
+    void deleteAllByProjectId(Long projectId);
+
+    /** 회원 탈퇴 시 그 사람 앞으로 온 알림을 전부 지운다. */
+    void deleteAllByUserId(Long userId);
 }

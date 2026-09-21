@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -29,4 +30,13 @@ public interface MeetingRepository extends JpaRepository<Meeting, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select m from Meeting m where m.id = :meetingId")
     Optional<Meeting> findByIdForUpdate(@Param("meetingId") Long meetingId);
+
+    /**
+     * 회원 탈퇴 시 만든 사람 참조만 끊는다 — 회의 자체(하위 데이터 포함)는 그대로 남긴다.
+     * clearAutomatically로 영속성 컨텍스트를 비워, 같은 트랜잭션 안에서 이후 조회가 벌크 업데이트 전
+     * 캐시된 값이 아니라 갱신된 값을 보게 한다.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update Meeting m set m.createdBy = null where m.createdBy.id = :userId")
+    void detachCreator(@Param("userId") Long userId);
 }

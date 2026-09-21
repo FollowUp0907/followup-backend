@@ -11,4 +11,6 @@ public interface MeetingParticipantRepository extends JpaRepository<MeetingParti
     void deleteAllByMeetingId(Long meetingId);
 
     void deleteAllByMeetingIdIn(List<Long> meetingIds);
+
+    void deleteAllByUserId(Long userId);
 }

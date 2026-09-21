@@ -60,6 +60,10 @@ public class User {
         this.googleId = googleId;
     }
 
+    public void updateName(String name) {
+        this.name = name;
+    }
+
     @PrePersist
     void prePersist() {
         LocalDateTime now = LocalDateTime.now();

@@ -77,4 +77,16 @@ public interface ActionItemRepository extends JpaRepository<ActionItem, Long>, A
     @Modifying
     @Query(value = "delete from action_item_assignees where action_item_id in (:actionItemIds)", nativeQuery = true)
     void deleteAllAssigneesByActionItemIdIn(@Param("actionItemIds") List<Long> actionItemIds);
+
+    /**
+     * 회원 탈퇴 시 만든 사람 참조만 끊는다 — OWNER가 아니었던(=cascade 삭제 대상이 아닌) 프로젝트에 남아
+     * 있는 업무의 created_by가 대상이다. fk_action_items_created_by는 nullable이지만 RESTRICT라서
+     * 미리 끊지 않으면 회원 삭제 시 FK 위반이 난다.
+     * flushAutomatically로 직전의 담당자 제거(removeAssignee, 엔티티 dirty-check)가 먼저 반영되게 하고,
+     * clearAutomatically로 영속성 컨텍스트를 비워 이후 조회가 벌크 업데이트 전 캐시된 값이 아니라
+     * 갱신된 값을 보게 한다.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update ActionItem a set a.createdBy = null where a.createdBy.id = :userId")
+    void detachCreator(@Param("userId") Long userId);
 }
