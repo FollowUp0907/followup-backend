@@ -9,11 +9,14 @@ import com.google.firebase.messaging.BatchResponse;
 import com.google.firebase.messaging.MessagingErrorCode;
 import com.google.firebase.messaging.MulticastMessage;
 import com.google.firebase.messaging.SendResponse;
+import com.google.firebase.messaging.WebpushConfig;
+import com.google.firebase.messaging.WebpushFcmOptions;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
@@ -36,6 +39,9 @@ public class PushNotificationSender {
 
     private final PushSubscriptionRepository pushSubscriptionRepository;
     private final Optional<FcmClient> fcmClient;
+
+    @Value("${app.origin}")
+    private String appOrigin;
 
     public void send(Notification notification) {
         if (fcmClient.isEmpty()) {
@@ -72,6 +78,7 @@ public class PushNotificationSender {
     @SuppressWarnings("deprecation")
     private MulticastMessage buildMessage(List<String> tokens, Notification notification) {
         String title = TITLES.getOrDefault(notification.getType(), DEFAULT_TITLE);
+        String projectId = String.valueOf(notification.getProject().getId());
         String actionItemId = notification.getActionItem() != null
                 ? String.valueOf(notification.getActionItem().getId())
                 : "";
@@ -82,12 +89,26 @@ public class PushNotificationSender {
                         .setTitle(title)
                         .setBody(notification.getTaskTitle())
                         .build())
+                .setWebpushConfig(WebpushConfig.builder()
+                        .setFcmOptions(WebpushFcmOptions.withLink(buildLink(appOrigin, projectId, actionItemId)))
+                        .build())
                 .putData("type", notification.getType().name())
-                .putData("projectId", String.valueOf(notification.getProject().getId()))
+                .putData("projectId", projectId)
                 .putData("actionItemId", actionItemId)
                 .putData("notificationId", String.valueOf(notification.getId()))
                 .putData("taskTitle", notification.getTaskTitle())
                 .build();
+    }
+
+    /**
+     * 클릭 시 이동할 링크 — data 필드는 서비스워커의 커스텀 클릭 핸들러가 쓰고, 이 fcm_options.link는
+     * 그 핸들러가 어떤 이유로든 실패해도 Firebase SDK 자체가 최소한의 이동을 보장하는 이중 안전망이다.
+     */
+    static String buildLink(String appOrigin, String projectId, String actionItemId) {
+        if (actionItemId == null || actionItemId.isEmpty()) {
+            return appOrigin + "/projects/" + projectId;
+        }
+        return appOrigin + "/projects/" + projectId + "/tasks/" + actionItemId;
     }
 
     /**

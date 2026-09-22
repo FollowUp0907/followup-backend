@@ -1,5 +1,6 @@
 package com.followup.push.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -179,5 +180,21 @@ class PushNotificationSenderTest {
 
         assertThatCode(() -> senderWithClient.send(notification(100L, recipient, null)))
                 .doesNotThrowAnyException();
+    }
+
+    // ---- buildLink ----
+
+    @Test
+    void buildLink_withActionItemId_pointsToTaskDetail() {
+        String link = PushNotificationSender.buildLink("https://app.example.com", "12", "34");
+
+        assertThat(link).isEqualTo("https://app.example.com/projects/12/tasks/34");
+    }
+
+    @Test
+    void buildLink_withoutActionItemId_pointsToProject() {
+        String link = PushNotificationSender.buildLink("https://app.example.com", "12", "");
+
+        assertThat(link).isEqualTo("https://app.example.com/projects/12");
     }
 }
