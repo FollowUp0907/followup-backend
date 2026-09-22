@@ -43,16 +43,21 @@ public class PushNotificationSender {
             return;
         }
 
-        List<String> tokens = pushSubscriptionRepository.findAllByUserId(notification.getUser().getId()).stream()
+        Long userId = notification.getUser().getId();
+        List<String> tokens = pushSubscriptionRepository.findAllByUserId(userId).stream()
                 .map(PushSubscription::getToken)
                 .toList();
         if (tokens.isEmpty()) {
+            log.info("등록된 푸시 토큰이 없어 발송을 건너뜁니다. notificationId={}, userId={}",
+                    notification.getId(), userId);
             return;
         }
 
         try {
             MulticastMessage message = buildMessage(tokens, notification);
             BatchResponse response = fcmClient.get().sendEachForMulticast(message);
+            log.info("푸시 발송 완료. notificationId={}, userId={}, 등록토큰수={}, 성공={}, 실패={}",
+                    notification.getId(), userId, tokens.size(), response.getSuccessCount(), response.getFailureCount());
             cleanUpDeadTokens(tokens, response);
         } catch (Exception e) {
             log.warn("푸시 발송 실패. notificationId={}", notification.getId(), e);
@@ -85,7 +90,10 @@ public class PushNotificationSender {
                 .build();
     }
 
-    /** 등록 해제된 토큰(UNREGISTERED/INVALID_ARGUMENT)은 다음 발송에서 또 실패하지 않도록 정리한다. */
+    /**
+     * 실패한 토큰마다 사유를 남기고, 등록 해제된 토큰(UNREGISTERED/INVALID_ARGUMENT)은 다음 발송에서
+     * 또 실패하지 않도록 정리한다.
+     */
     private void cleanUpDeadTokens(List<String> tokens, BatchResponse response) {
         List<SendResponse> responses = response.getResponses();
         for (int i = 0; i < responses.size(); i++) {
@@ -96,6 +104,7 @@ public class PushNotificationSender {
             MessagingErrorCode errorCode = sendResponse.getException() != null
                     ? sendResponse.getException().getMessagingErrorCode()
                     : null;
+            log.warn("푸시 발송 실패 토큰. token={}, errorCode={}", tokens.get(i), errorCode);
             if (errorCode == MessagingErrorCode.UNREGISTERED || errorCode == MessagingErrorCode.INVALID_ARGUMENT) {
                 pushSubscriptionRepository.deleteByToken(tokens.get(i));
             }
