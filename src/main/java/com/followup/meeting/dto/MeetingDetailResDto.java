@@ -23,7 +23,10 @@ public record MeetingDetailResDto(
         List<DecisionResDto> decisions
 ) {
 
-    /** AI 분석 확정으로 생성된 Decision을 회의 상세 응답에 함께 포함한다. */
+    /**
+     * AI 분석 확정으로 생성된 Decision을 회의 상세 응답에 함께 포함한다.
+     * 만든 사람이 탈퇴해 createdBy가 null인 회의도 있을 수 있다(회의 자체는 유지되므로).
+     */
     public static MeetingDetailResDto from(Meeting meeting,
                                               List<MeetingParticipant> participants,
                                               List<ActionItem> carryOverActionItems,
@@ -35,7 +38,7 @@ public record MeetingDetailResDto(
                 meeting.getScheduledAt(),
                 meeting.getContent(),
                 meeting.getStatus(),
-                meeting.getCreatedBy().getId(),
+                meeting.getCreatedBy() != null ? meeting.getCreatedBy().getId() : null,
                 meeting.getCreatedAt(),
                 meeting.getUpdatedAt(),
                 participants.stream().map(MeetingParticipantResDto::from).toList(),
